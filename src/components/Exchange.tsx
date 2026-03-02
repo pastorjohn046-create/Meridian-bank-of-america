@@ -5,7 +5,11 @@ import { MOCK_ASSETS } from '../mockData';
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
 
-export const ExchangeScreen: React.FC = () => {
+interface ExchangeProps {
+  user: any;
+}
+
+export const ExchangeScreen: React.FC<ExchangeProps> = ({ user }) => {
   const { theme } = useTheme();
   const [fromAsset, setFromAsset] = useState(MOCK_ASSETS[0]);
   const [toAsset, setToAsset] = useState(MOCK_ASSETS[1]);

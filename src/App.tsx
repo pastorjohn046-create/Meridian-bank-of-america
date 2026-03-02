@@ -9,8 +9,11 @@ import { MarketScreen } from './components/Market';
 import { TransactionDetails } from './components/TransactionDetails';
 import { ProfileScreen } from './components/Profile';
 import { AdminPortal } from './components/AdminPortal';
+import { SendScreen } from './components/SendScreen';
+import { WithdrawScreen } from './components/WithdrawScreen';
 import { LoginScreen } from './components/Login';
 import { SignupScreen } from './components/Signup';
+import { ChatBox } from './components/ChatBox';
 import { AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 
@@ -22,11 +25,45 @@ function AppContent() {
   const { theme } = useTheme();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('meridian_user');
+    if (savedUser) {
+      const user = JSON.parse(savedUser);
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+      setIsAdmin(user.email === 'buggybuggygmail.com');
+    }
+  }, []);
+
+  const handleLogin = (user: any, admin?: boolean) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    setIsAdmin(!!admin);
+    localStorage.setItem('meridian_user', JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setIsAdmin(false);
+    localStorage.removeItem('meridian_user');
+  };
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
     const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log('Connected to notifications');
+    };
+
+    socket.onerror = (error) => {
+      console.warn('WebSocket connection failed. Notifications will be disabled.');
+    };
 
     socket.onmessage = (event) => {
       try {
@@ -62,7 +99,7 @@ function AppContent() {
         "max-w-md mx-auto min-h-screen relative md:border-x transition-colors duration-300 overflow-hidden flex flex-col",
         theme === 'dark' ? "bg-zinc-950 border-zinc-800 shadow-zinc-900/50" : "bg-white border-gray-100 shadow-2xl shadow-gray-200/50"
       )}>
-        {showHeader && <Header />}
+        {showHeader && <Header onOpenChat={() => setIsChatOpen(true)} />}
         
         <main className={cn(
           "flex-1 overflow-y-auto no-scrollbar",
@@ -71,28 +108,32 @@ function AppContent() {
           <AnimatePresence mode="wait">
             <Routes location={location}>
               {/* Public Routes */}
-              <Route path="/login" element={!isAuthenticated ? <LoginScreen onLogin={(admin) => {
-                setIsAuthenticated(true);
-                setIsAdmin(!!admin);
-              }} /> : <Navigate to="/" />} />
-              <Route path="/signup" element={!isAuthenticated ? <SignupScreen onLogin={() => {
-                setIsAuthenticated(true);
-                setIsAdmin(false);
-              }} /> : <Navigate to="/" />} />
+              <Route path="/login" element={!isAuthenticated ? <LoginScreen onLogin={handleLogin} /> : <Navigate to="/" />} />
+              <Route path="/signup" element={!isAuthenticated ? <SignupScreen onLogin={handleLogin} /> : <Navigate to="/" />} />
 
               {/* Protected Routes */}
-              <Route path="/" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} />
-              <Route path="/wallet" element={isAuthenticated ? <WalletScreen /> : <Navigate to="/login" />} />
-              <Route path="/exchange" element={isAuthenticated ? <ExchangeScreen /> : <Navigate to="/login" />} />
-              <Route path="/market" element={isAuthenticated ? <MarketScreen /> : <Navigate to="/login" />} />
-              <Route path="/profile" element={isAuthenticated ? <ProfileScreen isAdmin={isAdmin} /> : <Navigate to="/login" />} />
+              <Route path="/" element={isAuthenticated ? <Dashboard user={currentUser} /> : <Navigate to="/login" />} />
+              <Route path="/wallet" element={isAuthenticated ? <WalletScreen user={currentUser} /> : <Navigate to="/login" />} />
+              <Route path="/exchange" element={isAuthenticated ? <ExchangeScreen user={currentUser} /> : <Navigate to="/login" />} />
+              <Route path="/market" element={isAuthenticated ? <MarketScreen user={currentUser} /> : <Navigate to="/login" />} />
+              <Route path="/profile" element={isAuthenticated ? <ProfileScreen isAdmin={isAdmin} user={currentUser} onLogout={handleLogout} onOpenChat={() => setIsChatOpen(true)} /> : <Navigate to="/login" />} />
               <Route path="/admin" element={isAuthenticated && isAdmin ? <AdminPortal /> : <Navigate to="/" />} />
+              <Route path="/send" element={isAuthenticated ? <SendScreen /> : <Navigate to="/login" />} />
+              <Route path="/withdraw" element={isAuthenticated ? <WithdrawScreen /> : <Navigate to="/login" />} />
               <Route path="/transaction/:id" element={isAuthenticated ? <TransactionDetails /> : <Navigate to="/login" />} />
             </Routes>
           </AnimatePresence>
         </main>
 
         {showBottomNav && <BottomNav />}
+        
+        {isAuthenticated && currentUser && (
+          <ChatBox 
+            user={currentUser} 
+            isOpen={isChatOpen} 
+            onClose={() => setIsChatOpen(false)} 
+          />
+        )}
       </div>
     </div>
   );

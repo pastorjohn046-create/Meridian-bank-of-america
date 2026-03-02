@@ -16,8 +16,10 @@ import {
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
 
+import { api } from '../services/api';
+
 interface AuthProps {
-  onLogin: () => void;
+  onLogin: (user: any) => void;
 }
 
 type SignupStep = 'personal' | 'security' | 'verification' | 'success';
@@ -50,21 +52,22 @@ export const SignupScreen: React.FC<AuthProps> = ({ onLogin }) => {
 
   const handleComplete = async () => {
     try {
-      await fetch('/api/users/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          pin: formData.pin,
-        })
+      const data = await api.registerUser({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        pin: formData.pin,
       });
-      onLogin();
+      
+      if (data.status === 'ok') {
+        onLogin(data.user);
+      } else {
+        onLogin({ name: formData.name, email: formData.email, id: Date.now().toString(), balance: 0 });
+      }
       navigate('/');
     } catch (error) {
       console.error('Registration failed:', error);
-      onLogin(); // Fallback to login even if API fails for demo purposes
+      onLogin({ name: formData.name, email: formData.email, id: Date.now().toString(), balance: 0 }); // Fallback
       navigate('/');
     }
   };
@@ -250,7 +253,7 @@ export const SignupScreen: React.FC<AuthProps> = ({ onLogin }) => {
         {step !== 'success' ? (
           <button 
             onClick={handleNext}
-            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 active:scale-95 transition-all"
+            className="w-full py-4 bg-premium-gradient text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 hover:bg-zinc-900 active:scale-95 transition-all"
           >
             Continue
             <ArrowRight size={16} />
@@ -258,7 +261,7 @@ export const SignupScreen: React.FC<AuthProps> = ({ onLogin }) => {
         ) : (
           <button 
             onClick={handleComplete}
-            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 active:scale-95 transition-all"
+            className="w-full py-4 bg-premium-gradient text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 hover:bg-zinc-900 active:scale-95 transition-all"
           >
             Go to Dashboard
             <ArrowRight size={16} />

@@ -23,11 +23,17 @@ import { toast } from 'sonner';
 
 interface ProfileProps {
   isAdmin?: boolean;
+  user: any;
+  onLogout: () => void;
+  onOpenChat: () => void;
 }
 
-export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin }) => {
+export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin, user, onLogout, onOpenChat }) => {
   const { theme } = useTheme();
   const navigate = useNavigate();
+  const userName = user?.name || 'Felix Henderson';
+  const userEmail = user?.email || 'felix@example.com';
+  const userSeed = userName.split(' ')[0];
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -36,7 +42,7 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin }) => {
 
   const menuItems = [
     ...(isAdmin ? [{ icon: ShieldAlert, label: 'System Administration', sub: 'Admin Portal Access', action: () => navigate('/admin') }] : []),
-    { icon: Headset, label: 'Customer Care', sub: '24/7 Priority Support', action: () => window.location.href = 'mailto:support@meridianwealth.com' },
+    { icon: Headset, label: 'Customer Care', sub: '24/7 Priority Support', action: onOpenChat },
     { icon: Shield, label: 'Security & Privacy', sub: 'PIN, Biometrics, 2FA' },
     { icon: Bell, label: 'Notifications', sub: 'Alerts, Marketing, Push' },
     { icon: CreditCard, label: 'Linked Accounts', sub: 'Banks, Cards, Wallets' },
@@ -63,7 +69,7 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin }) => {
         <div className="relative">
           <div className="w-20 h-20 rounded-full bg-indigo-600 p-1">
             <img 
-              src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" 
+              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userSeed}`} 
               alt="User" 
               className="w-full h-full rounded-full bg-white"
               referrerPolicy="no-referrer"
@@ -74,8 +80,8 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin }) => {
           </div>
         </div>
         <div>
-          <h3 className={cn("text-lg font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Felix Henderson</h3>
-          <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest">Private Tier Member</p>
+          <h3 className={cn("text-lg font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{userName}</h3>
+          <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest">{isAdmin ? 'System Administrator' : 'Private Tier Member'}</p>
         </div>
       </div>
 
@@ -141,7 +147,8 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin }) => {
       <button 
         onClick={() => {
           toast.info('Logging out...');
-          setTimeout(() => window.location.reload(), 1000);
+          onLogout();
+          navigate('/login');
         }}
         className={cn(
           "w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95",

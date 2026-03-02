@@ -13,7 +13,11 @@ const CRYPTO_MARKET = [
   { name: 'Chainlink', symbol: 'LINK', price: 18.50, change: 1.2, color: '#2a5ada' },
 ];
 
-export const MarketScreen: React.FC = () => {
+interface MarketProps {
+  user: any;
+}
+
+export const MarketScreen: React.FC<MarketProps> = ({ user }) => {
   const { theme } = useTheme();
   return (
     <motion.div 

@@ -4,7 +4,11 @@ import { Link } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onOpenChat: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onOpenChat }) => {
   const { theme, toggleTheme } = useTheme();
 
   return (
@@ -13,12 +17,12 @@ export const Header: React.FC = () => {
       theme === 'dark' ? "bg-zinc-950/80 border-b border-zinc-800" : "bg-white/80 border-b border-gray-50"
     )}>
       <div className="flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-          <Compass size={20} strokeWidth={2.5} />
+        <div className="w-9 h-9 rounded-xl bg-premium-gradient flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+          <Compass size={20} strokeWidth={2.5} className="text-gold" />
         </div>
         <div>
           <h1 className={cn("text-xs font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Meridian Wealth</h1>
-          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Private Client</p>
+          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Institutional Banking</p>
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -27,9 +31,7 @@ export const Header: React.FC = () => {
             "p-2 rounded-full transition-all active:scale-90",
             theme === 'dark' ? "text-zinc-400 hover:bg-zinc-900" : "text-gray-500 hover:bg-gray-100"
           )}
-          onClick={() => {
-            window.location.href = 'mailto:support@meridianwealth.com';
-          }}
+          onClick={onOpenChat}
         >
           <Headset size={18} />
         </button>

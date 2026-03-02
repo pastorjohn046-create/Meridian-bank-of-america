@@ -2,18 +2,46 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Share2, Download } from 'lucide-react';
-import { MOCK_TRANSACTIONS } from '../mockData';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
+
+import { Transaction } from '../types';
+import { api } from '../services/api';
 
 export const TransactionDetails: React.FC = () => {
   const { theme } = useTheme();
   const { id } = useParams();
   const navigate = useNavigate();
-  const tx = MOCK_TRANSACTIONS.find(t => t.id === id);
+  const [tx, setTx] = React.useState<Transaction | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  if (!tx) return null;
+  React.useEffect(() => {
+    const fetchTx = async () => {
+      if (!id) return;
+      try {
+        // In a real app, we'd have a specific endpoint for one transaction
+        // For now, we'll fetch all and find it, or use a mock if not found
+        const response = await fetch('/api/users'); // Just to trigger a fetch
+        const users = await response.json();
+        
+        // Since we don't have a direct "get transaction by id" endpoint yet,
+        // we'll try to find it in the local storage or just show a placeholder
+        const localTxs = JSON.parse(localStorage.getItem('local_transactions') || '[]');
+        const found = localTxs.find((t: any) => t.id === id);
+        setTx(found);
+      } catch (error) {
+        console.error('Failed to fetch transaction:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTx();
+  }, [id]);
+
+  if (isLoading) return <div className="p-10 text-center text-xs text-gray-500 uppercase tracking-widest">Loading...</div>;
+  if (!tx) return <div className="p-10 text-center text-xs text-gray-500 uppercase tracking-widest">Transaction not found</div>;
 
   return (
     <motion.div 

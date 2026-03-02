@@ -5,8 +5,10 @@ import { Mail, Lock, ArrowRight, ChevronLeft, Compass } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
 
+import { api } from '../services/api';
+
 interface AuthProps {
-  onLogin: (isAdmin?: boolean) => void;
+  onLogin: (user: any, isAdmin?: boolean) => void;
 }
 
 export const LoginScreen: React.FC<AuthProps> = ({ onLogin }) => {
@@ -14,15 +16,34 @@ export const LoginScreen: React.FC<AuthProps> = ({ onLogin }) => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     
-    // Check for admin credentials
-    const isAdmin = email === 'buggybuggygmail.com' && password === 'utsalo123';
-    
-    onLogin(isAdmin);
-    navigate('/');
+    try {
+      const users = await api.getUsers();
+      
+      const user = users.find((u: any) => u.email === email);
+      const isAdmin = email === 'buggybuggygmail.com' && password === 'utsalo123';
+      
+      if (isAdmin) {
+        onLogin({ email, name: 'Administrator' }, true);
+      } else if (user) {
+        onLogin(user, false);
+      } else {
+        // Fallback for demo if user not found in API
+        onLogin({ email, name: email.split('@')[0], id: Date.now().toString(), balance: 0 }, false);
+      }
+      navigate('/');
+    } catch (error) {
+      console.error('Login failed:', error);
+      onLogin({ email, name: email.split('@')[0], id: Date.now().toString(), balance: 0 }, false);
+      navigate('/');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -37,8 +58,8 @@ export const LoginScreen: React.FC<AuthProps> = ({ onLogin }) => {
     >
       <div className="flex-1 space-y-6">
         <header className="space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-            <Compass size={28} strokeWidth={2.5} />
+          <div className="w-12 h-12 rounded-2xl bg-premium-gradient flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+            <Compass size={28} strokeWidth={2.5} className="text-gold" />
           </div>
           <div className="space-y-0.5">
             <h1 className={cn("text-xl font-bold tracking-tight transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Welcome back</h1>
@@ -84,7 +105,7 @@ export const LoginScreen: React.FC<AuthProps> = ({ onLogin }) => {
 
           <button 
             type="submit"
-            className="w-full py-3.5 bg-indigo-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 active:scale-95 transition-all"
+            className="w-full py-3.5 bg-premium-gradient text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 hover:bg-zinc-900 active:scale-95 transition-all"
           >
             Sign In
             <ArrowRight size={16} />
