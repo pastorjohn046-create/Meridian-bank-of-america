@@ -64,8 +64,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
   const [editAccountNumber, setEditAccountNumber] = useState('');
   const [editSortCode, setEditSortCode] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'deposits' | 'crypto' | 'support'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'deposits' | 'crypto' | 'support' | 'withdrawals'>('users');
   const [allMessages, setAllMessages] = useState<any[]>([]);
+  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
   const [selectedUserForChat, setSelectedUserForChat] = useState<string | null>(null);
   const [adminReply, setAdminReply] = useState('');
   const [socket, setSocket] = useState<WebSocket | null>(null);
@@ -80,16 +81,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
 
   const fetchData = async () => {
     try {
-      const [usersData, depositsData, cryptoData, messagesData] = await Promise.all([
+      const [usersData, depositsData, cryptoData, messagesData, withdrawalsData] = await Promise.all([
         api.getUsers(),
         api.getDepositAccounts(),
         api.getCryptoWallets(),
-        api.getMessages('admin')
+        api.getMessages('admin'),
+        api.getPendingWithdrawals()
       ]);
       setUsers(usersData);
       setDepositAccounts(depositsData);
       setCryptoWallets(cryptoData);
       setAllMessages(messagesData);
+      setPendingWithdrawals(withdrawalsData);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -138,6 +141,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
         } else if (message.type === 'CRYPTO_WALLETS_UPDATED') {
           setCryptoWallets(message.data);
           toast.info('Crypto wallets updated');
+        } else if (message.type === 'WITHDRAWAL_REQUESTED') {
+          setPendingWithdrawals(prev => [...prev, message.data]);
+          toast.info(`New withdrawal request from ${message.data.userName}`);
+        } else if (message.type === 'WITHDRAWAL_APPROVED' || message.type === 'WITHDRAWAL_REJECTED') {
+          setPendingWithdrawals(prev => prev.filter(w => w.id !== message.data.id));
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);
@@ -212,6 +220,35 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
       }
     } catch (e) {
       toast.error('Failed to update wallet');
+    }
+  };
+  
+  const handleApproveWithdrawal = async (id: string) => {
+    try {
+      const result = await api.approveWithdrawal(id);
+      if (result.status === 'ok') {
+        setPendingWithdrawals(pendingWithdrawals.filter(w => w.id !== id));
+        if (result.user) {
+          setUsers(users.map(u => u.id === result.user.id ? result.user : u));
+        }
+        toast.success('Withdrawal approved successfully');
+      } else {
+        toast.error(result.message || 'Failed to approve withdrawal');
+      }
+    } catch (e) {
+      toast.error('Failed to approve withdrawal');
+    }
+  };
+
+  const handleRejectWithdrawal = async (id: string) => {
+    try {
+      const result = await api.rejectWithdrawal(id);
+      if (result.status === 'ok') {
+        setPendingWithdrawals(pendingWithdrawals.filter(w => w.id !== id));
+        toast.success('Withdrawal rejected');
+      }
+    } catch (e) {
+      toast.error('Failed to reject withdrawal');
     }
   };
 
@@ -364,7 +401,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
               : "text-gray-500"
           )}
         >
-          Crypto Wallets
+          Crypto
+        </button>
+        <button 
+          onClick={() => setActiveTab('withdrawals')}
+          className={cn(
+            "flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all relative",
+            activeTab === 'withdrawals' 
+              ? (theme === 'dark' ? "bg-zinc-800 text-zinc-100 shadow-lg" : "bg-white text-gray-900 shadow-sm")
+              : "text-gray-500"
+          )}
+        >
+          Withdrawals
+          {pendingWithdrawals.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white dark:border-zinc-900">
+              {pendingWithdrawals.length}
+            </span>
+          )}
         </button>
         <button 
           onClick={() => setActiveTab('support')}
@@ -528,6 +581,72 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'withdrawals' ? (
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h3 className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Pending Withdrawal Requests ({pendingWithdrawals.length})</h3>
+            <div className="space-y-3">
+              {pendingWithdrawals.length === 0 ? (
+                <div className={cn(
+                  "p-10 rounded-2xl border-2 border-dashed text-center space-y-2",
+                  theme === 'dark' ? "border-zinc-800 bg-zinc-900/20" : "border-gray-100 bg-gray-50/50"
+                )}>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">No Pending Withdrawals</p>
+                  <p className="text-[8px] text-gray-400">All withdrawal requests have been processed.</p>
+                </div>
+              ) : (
+                pendingWithdrawals.map((tx) => (
+                  <div 
+                    key={tx.id}
+                    className={cn(
+                      "p-4 rounded-2xl border space-y-4",
+                      theme === 'dark' ? "bg-zinc-900/50 border-zinc-800" : "bg-white border-gray-100 shadow-sm"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500">
+                          <ArrowDownCircle size={20} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold">{tx.userName || 'Unknown User'}</p>
+                          <p className="text-[9px] text-gray-500 font-medium">{format(new Date(tx.timestamp), 'MMM dd, yyyy HH:mm')}</p>
+                          {tx.details?.accountNumber && (
+                            <p className="text-[9px] text-indigo-500 font-bold mt-1">
+                              {tx.details.bankName}: {tx.details.accountNumber}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-red-500">-${tx.amount.toLocaleString()}</p>
+                        <p className="text-[8px] text-gray-400 font-bold uppercase tracking-tighter">{tx.details?.method || 'Bank Transfer'}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-2 border-t border-dashed border-gray-200 dark:border-zinc-800">
+                      <button 
+                        onClick={() => handleApproveWithdrawal(tx.id)}
+                        className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                      >
+                        Approve
+                      </button>
+                      <button 
+                        onClick={() => handleRejectWithdrawal(tx.id)}
+                        className={cn(
+                          "flex-1 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all",
+                          theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-100 text-gray-600"
+                        )}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

@@ -20,16 +20,30 @@ export const TransactionDetails: React.FC = () => {
     const fetchTx = async () => {
       if (!id) return;
       try {
-        // In a real app, we'd have a specific endpoint for one transaction
-        // For now, we'll fetch all and find it, or use a mock if not found
-        const response = await fetch('/api/users'); // Just to trigger a fetch
-        const users = await response.json();
-        
-        // Since we don't have a direct "get transaction by id" endpoint yet,
-        // we'll try to find it in the local storage or just show a placeholder
-        const localTxs = JSON.parse(localStorage.getItem('local_transactions') || '[]');
-        const found = localTxs.find((t: any) => t.id === id);
-        setTx(found);
+        // Try to get current user to find their transactions
+        const userStr = localStorage.getItem('meridian_user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          const transactions = await api.getTransactions(user.id);
+          const found = transactions.find(t => t.id === id);
+          if (found) {
+            setTx(found);
+            return;
+          }
+        }
+
+        // Fallback: search all txs keys in localStorage
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith('txs_')) {
+            const txs = JSON.parse(localStorage.getItem(key) || '[]');
+            const found = txs.find((t: any) => t.id === id);
+            if (found) {
+              setTx(found);
+              return;
+            }
+          }
+        }
       } catch (error) {
         console.error('Failed to fetch transaction:', error);
       } finally {
@@ -73,19 +87,27 @@ export const TransactionDetails: React.FC = () => {
         </div>
         <div className="text-center">
           <p className={cn("text-2xl font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>
-            {tx.type === 'receive' ? '+' : '-'}{tx.amount} {tx.asset.split(' ')[0]}
+            {tx.type === 'receive' ? '+' : '-'}{tx.amount} {tx.asset?.split(' ')[0] || 'USD'}
           </p>
-          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">${tx.fiatAmount.toFixed(2)}</p>
+          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">${(tx.fiatAmount || tx.amount).toFixed(2)}</p>
         </div>
-        <div className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full text-[9px] font-bold uppercase tracking-wider">
-          Completed
+        <div className={cn(
+          "px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider",
+          tx.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" :
+          tx.status === 'pending' ? "bg-amber-500/10 text-amber-500" : "bg-red-500/10 text-red-500"
+        )}>
+          {tx.status || 'Completed'}
         </div>
       </div>
 
       <div className={cn("rounded-2xl p-4 space-y-3", theme === 'dark' ? "bg-zinc-900/50 border border-zinc-800" : "bg-gray-50")}>
         <div className="flex justify-between items-center">
           <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Status</span>
-          <span className="text-[11px] font-bold text-emerald-500 uppercase">Success</span>
+          <span className={cn(
+            "text-[11px] font-bold uppercase",
+            tx.status === 'completed' ? "text-emerald-500" :
+            tx.status === 'pending' ? "text-amber-500" : "text-red-500"
+          )}>{tx.status === 'completed' ? 'Success' : tx.status || 'Success'}</span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Date</span>
@@ -93,7 +115,9 @@ export const TransactionDetails: React.FC = () => {
         </div>
         <div className="flex justify-between items-center">
           <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Counterparty</span>
-          <span className={cn("text-[11px] font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{tx.counterparty || 'Internal Swap'}</span>
+          <span className={cn("text-[11px] font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>
+            {(tx as any).details?.accountNumber ? `${(tx as any).details.bankName} (${(tx as any).details.accountNumber})` : tx.counterparty || 'Internal Swap'}
+          </span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Network Fee</span>

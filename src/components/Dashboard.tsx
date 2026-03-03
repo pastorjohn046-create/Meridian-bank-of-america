@@ -151,7 +151,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   </div>
                   <div>
                     <p className={cn("text-[11px] font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{tx.counterparty || tx.type.toUpperCase()}</p>
-                    <p className="text-[8px] text-gray-500 font-bold uppercase tracking-tight">{format(new Date(tx.timestamp), 'MMM dd, HH:mm')}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[8px] text-gray-500 font-bold uppercase tracking-tight">{format(new Date(tx.timestamp), 'MMM dd, HH:mm')}</p>
+                      {tx.status === 'pending' && (
+                        <span className="text-[7px] font-bold uppercase px-1 bg-amber-500/10 text-amber-500 rounded">Pending</span>
+                      )}
+                      {tx.status === 'failed' && (
+                        <span className="text-[7px] font-bold uppercase px-1 bg-red-500/10 text-red-500 rounded">Failed</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="text-right">

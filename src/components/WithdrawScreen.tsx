@@ -16,22 +16,26 @@ interface WithdrawScreenProps {
 export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUser }) => {
   const { theme } = useTheme();
   const navigate = useNavigate();
-  const [step, setStep] = useState<'method' | 'amount' | 'confirm' | 'success'>('method');
+  const [step, setStep] = useState<'method' | 'manual' | 'amount' | 'confirm' | 'success'>('method');
   const [method, setMethod] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [saveMethod, setSaveMethod] = useState(false);
   const [amount, setAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [depositAccounts, setDepositAccounts] = useState<any[]>([]);
+  const [withdrawalMethods, setWithdrawalMethods] = useState<any[]>([]);
 
   useEffect(() => {
-    const fetchAccounts = async () => {
+    const fetchMethods = async () => {
+      if (!user?.id) return;
       try {
-        const data = await api.getDepositAccounts();
-        setDepositAccounts(data);
+        const data = await api.getWithdrawalMethods(user.id);
+        setWithdrawalMethods(data);
       } catch (error) {
-        console.error('Failed to fetch deposit accounts:', error);
+        console.error('Failed to fetch withdrawal methods:', error);
       }
     };
-    fetchAccounts();
+    fetchMethods();
 
     // WebSocket for real-time updates
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -41,8 +45,8 @@ export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUs
     socket.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message.type === 'DEPOSIT_ACCOUNTS_UPDATED') {
-          setDepositAccounts(message.data);
+        if (message.type === 'WITHDRAWAL_METHODS_UPDATED' && message.userId === user?.id) {
+          setWithdrawalMethods(message.data);
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);
@@ -67,6 +71,15 @@ export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUs
     }
 
     try {
+      // If user chose to save the method
+      if (step === 'manual' && saveMethod && user?.id) {
+        await api.addWithdrawalMethod(user.id, {
+          bankName,
+          accountNumber,
+          accountName: user.name
+        });
+      }
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
@@ -74,7 +87,11 @@ export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUs
         userId: user?.id || 'current',
         type: 'withdraw',
         amount: parseFloat(amount),
-        details: { method }
+        details: { 
+          method, 
+          accountNumber: accountNumber || (method.includes('(') ? method.split('(')[1].replace(')', '') : ''),
+          bankName: bankName || (method.includes('(') ? method.split(' (')[0] : method)
+        }
       });
 
       if (result.status === 'ok') {
@@ -122,7 +139,12 @@ export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUs
       <header className="px-5 pt-6 pb-4 flex items-center gap-4">
         {step !== 'success' && (
           <button 
-            onClick={() => step === 'method' ? navigate(-1) : setStep('method')}
+            onClick={() => {
+              if (step === 'method') navigate(-1);
+              else if (step === 'manual') setStep('method');
+              else if (step === 'amount') setStep(method === 'Manual Bank Transfer' ? 'manual' : 'method');
+              else setStep('amount');
+            }}
             className={cn(
               "p-2 rounded-full border transition-colors",
               theme === 'dark' ? "border-zinc-800 text-zinc-400" : "border-gray-100 text-gray-600"
@@ -140,38 +162,113 @@ export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUs
             <div className="space-y-2">
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Select Withdrawal Method</p>
               <div className="space-y-2">
-                {depositAccounts.length === 0 ? (
-                  <div className={cn(
-                    "p-8 rounded-2xl border-2 border-dashed text-center space-y-2",
-                    theme === 'dark' ? "border-zinc-800 bg-zinc-900/20" : "border-gray-100 bg-gray-50/50"
-                  )}>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">No Withdrawal Methods</p>
-                    <p className="text-[8px] text-gray-400">Please contact support to add a withdrawal method.</p>
+                <button 
+                  onClick={() => {
+                    setMethod('Manual Bank Transfer');
+                    setStep('manual');
+                  }}
+                  className={cn(
+                    "w-full p-4 rounded-2xl border flex items-center gap-4 transition-all active:scale-95",
+                    theme === 'dark' ? "bg-zinc-900 border-zinc-800 hover:bg-zinc-800" : "bg-gray-50 border-gray-100 hover:bg-gray-100"
+                  )}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-600">
+                    <Building2 size={20} />
                   </div>
-                ) : (
-                  depositAccounts.map((m, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => {
-                        setMethod(`${m.bankName} (${m.accountNumber})`);
-                        setStep('amount');
-                      }}
-                      className={cn(
-                        "w-full p-4 rounded-2xl border flex items-center gap-4 transition-all active:scale-95",
-                        theme === 'dark' ? "bg-zinc-900 border-zinc-800 hover:bg-zinc-800" : "bg-gray-50 border-gray-100 hover:bg-gray-100"
-                      )}
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-600">
-                        <Building2 size={20} />
-                      </div>
-                      <div className="text-left">
-                        <p className="text-sm font-bold">{m.bankName}</p>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">{m.accountNumber} • {m.accountName}</p>
-                      </div>
-                    </button>
-                  ))
+                  <div className="text-left">
+                    <p className="text-sm font-bold">Manual Bank Transfer</p>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">Enter details manually</p>
+                  </div>
+                </button>
+
+                {withdrawalMethods.length > 0 && (
+                  <div className="pt-4 pb-2">
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Saved Methods</p>
+                  </div>
                 )}
+
+                {withdrawalMethods.map((m, i) => (
+                  <button 
+                    key={i} 
+                    onClick={() => {
+                      setMethod(`${m.bankName} (${m.accountNumber})`);
+                      setAccountNumber(m.accountNumber);
+                      setBankName(m.bankName);
+                      setStep('amount');
+                    }}
+                    className={cn(
+                      "w-full p-4 rounded-2xl border flex items-center gap-4 transition-all active:scale-95",
+                      theme === 'dark' ? "bg-zinc-900 border-zinc-800 hover:bg-zinc-800" : "bg-gray-50 border-gray-100 hover:bg-gray-100"
+                    )}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-600">
+                      <Building2 size={20} />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold">{m.bankName}</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">{m.accountNumber} • {m.accountName || user.name}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {step === 'manual' && (
+          <div className="space-y-6 flex flex-col h-full">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Bank Name</p>
+                <input 
+                  type="text"
+                  placeholder="e.g. Chase Bank"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className={cn(
+                    "w-full p-4 rounded-2xl border outline-none font-bold",
+                    theme === 'dark' ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-gray-50 border-gray-100 text-gray-900"
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Account Number</p>
+                <input 
+                  type="text"
+                  placeholder="e.g. 1234567890"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  className={cn(
+                    "w-full p-4 rounded-2xl border outline-none font-bold",
+                    theme === 'dark' ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-gray-50 border-gray-100 text-gray-900"
+                  )}
+                />
+              </div>
+
+              <div className="flex items-center gap-3 px-1 pt-2">
+                <button 
+                  onClick={() => setSaveMethod(!saveMethod)}
+                  className={cn(
+                    "w-5 h-5 rounded border flex items-center justify-center transition-all",
+                    saveMethod 
+                      ? "bg-indigo-600 border-indigo-600 text-white" 
+                      : (theme === 'dark' ? "border-zinc-800 bg-zinc-900" : "border-gray-200 bg-white")
+                  )}
+                >
+                  {saveMethod && <CheckCircle2 size={14} />}
+                </button>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Save this account for future use</p>
+              </div>
+            </div>
+
+            <div className="mt-auto pb-10">
+              <button 
+                disabled={!bankName || !accountNumber}
+                onClick={() => setStep('amount')}
+                className="w-full py-4 bg-indigo-600 disabled:opacity-50 text-white rounded-2xl font-bold text-sm shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
+              >
+                Continue
+              </button>
             </div>
           </div>
         )}
@@ -200,7 +297,7 @@ export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUs
               {[100, 500, 1000, 2000, 5000, 'All'].map((val, i) => (
                 <button 
                   key={i}
-                  onClick={() => setAmount(val === 'All' ? '12450' : val.toString())}
+                  onClick={() => setAmount(val === 'All' ? user.balance.toString() : val.toString())}
                   className={cn(
                     "py-3 rounded-xl text-xs font-bold transition-all active:scale-95",
                     theme === 'dark' ? "bg-zinc-900 text-zinc-400 border border-zinc-800" : "bg-gray-100 text-gray-600"
@@ -234,8 +331,12 @@ export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUs
                 <p className="text-xl font-bold">${parseFloat(amount).toLocaleString()}</p>
               </div>
               <div className="flex justify-between items-center pb-4 border-b border-dashed border-gray-200">
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Method</p>
-                <p className="text-sm font-bold">{method}</p>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Bank</p>
+                <p className="text-sm font-bold">{bankName || (method.includes('(') ? method.split(' (')[0] : method)}</p>
+              </div>
+              <div className="flex justify-between items-center pb-4 border-b border-dashed border-gray-200">
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Account Number</p>
+                <p className="text-sm font-bold">{accountNumber || (method.includes('(') ? method.split('(')[1].replace(')', '') : '')}</p>
               </div>
               <div className="flex justify-between items-center">
                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Processing Time</p>

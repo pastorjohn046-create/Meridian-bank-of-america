@@ -10,7 +10,24 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      return JSON.parse(localStorage.getItem('local_users') || '[]');
+      const local = localStorage.getItem('local_users');
+      if (!local) {
+        // Seed initial admin user if empty
+        const initialUsers = [{
+          id: 'admin-1',
+          name: 'System Admin',
+          email: 'Jobfindercorps@gmail.com',
+          pin: '1234',
+          balance: 1000000,
+          accountNumber: '8822 4411 9900',
+          sortCode: '20-44-99',
+          status: 'active',
+          joinDate: '2024-01-01'
+        }];
+        localStorage.setItem('local_users', JSON.stringify(initialUsers));
+        return initialUsers;
+      }
+      return JSON.parse(local);
     }
   },
 
@@ -252,15 +269,146 @@ export const api = {
       return await response.json();
     } catch (error) {
       const txs = JSON.parse(localStorage.getItem(`txs_${txData.userId}`) || '[]');
+      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
+      const user = users.find((u: any) => u.id === txData.userId);
+      
       const newTx = {
         ...txData,
         id: Date.now().toString(),
+        userName: user ? user.name : 'Unknown',
         timestamp: new Date().toISOString(),
         status: 'pending'
       };
       txs.push(newTx);
       localStorage.setItem(`txs_${txData.userId}`, JSON.stringify(txs));
+      
+      // Also store in a global pending withdrawals list for admin
+      if (txData.type === 'withdraw') {
+        const allWithdrawals = JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
+        allWithdrawals.push(newTx);
+        localStorage.setItem('local_pending_withdrawals', JSON.stringify(allWithdrawals));
+      }
+
       return { status: 'ok', transaction: newTx };
+    }
+  },
+
+  async getPendingWithdrawals() {
+    try {
+      const response = await fetch('/api/admin/withdrawals');
+      if (!response.ok) throw new Error('API failed');
+      return await response.json();
+    } catch (error) {
+      return JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
+    }
+  },
+
+  async approveWithdrawal(id: string) {
+    try {
+      const response = await fetch('/api/admin/withdrawals/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      if (!response.ok) throw new Error('API failed');
+      return await response.json();
+    } catch (error) {
+      const allWithdrawals = JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
+      const txIndex = allWithdrawals.findIndex((t: any) => t.id === id);
+      
+      if (txIndex !== -1) {
+        const tx = allWithdrawals[txIndex];
+        const users = JSON.parse(localStorage.getItem('local_users') || '[]');
+        const userIndex = users.findIndex((u: any) => u.id === tx.userId);
+        
+        if (userIndex !== -1) {
+          if (users[userIndex].balance < tx.amount) {
+            return { status: 'error', message: 'Insufficient balance' };
+          }
+          
+          // Deduct balance
+          users[userIndex].balance -= tx.amount;
+          localStorage.setItem('local_users', JSON.stringify(users));
+          
+          // Update transaction status in user's list
+          const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
+          const userTxIndex = userTxs.findIndex((t: any) => t.id === id);
+          if (userTxIndex !== -1) {
+            userTxs[userTxIndex].status = 'completed';
+            localStorage.setItem(`txs_${tx.userId}`, JSON.stringify(userTxs));
+          }
+          
+          // Remove from pending
+          allWithdrawals.splice(txIndex, 1);
+          localStorage.setItem('local_pending_withdrawals', JSON.stringify(allWithdrawals));
+          
+          return { status: 'ok', user: users[userIndex] };
+        }
+      }
+      return { status: 'error', message: 'Withdrawal not found' };
+    }
+  },
+
+  async rejectWithdrawal(id: string) {
+    try {
+      const response = await fetch('/api/admin/withdrawals/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      if (!response.ok) throw new Error('API failed');
+      return await response.json();
+    } catch (error) {
+      const allWithdrawals = JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
+      const txIndex = allWithdrawals.findIndex((t: any) => t.id === id);
+      
+      if (txIndex !== -1) {
+        const tx = allWithdrawals[txIndex];
+        
+        // Update transaction status in user's list
+        const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
+        const userTxIndex = userTxs.findIndex((t: any) => t.id === id);
+        if (userTxIndex !== -1) {
+          userTxs[userTxIndex].status = 'failed';
+          localStorage.setItem(`txs_${tx.userId}`, JSON.stringify(userTxs));
+        }
+        
+        // Remove from pending
+        allWithdrawals.splice(txIndex, 1);
+        localStorage.setItem('local_pending_withdrawals', JSON.stringify(allWithdrawals));
+        
+        return { status: 'ok' };
+      }
+      return { status: 'error', message: 'Withdrawal not found' };
+    }
+  },
+
+  // --- Withdrawal Methods (User Specific) ---
+  async getWithdrawalMethods(userId: string) {
+    try {
+      const response = await fetch(`/api/users/${userId}/withdrawal-methods`);
+      if (!response.ok) throw new Error('API failed');
+      return await response.json();
+    } catch (error) {
+      return JSON.parse(localStorage.getItem(`withdrawal_methods_${userId}`) || '[]');
+    }
+  },
+
+  async addWithdrawalMethod(userId: string, method: any) {
+    try {
+      const response = await fetch(`/api/users/${userId}/withdrawal-methods`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(method)
+      });
+      if (!response.ok) throw new Error('API failed');
+      return await response.json();
+    } catch (error) {
+      const methods = JSON.parse(localStorage.getItem(`withdrawal_methods_${userId}`) || '[]');
+      const newMethod = { ...method, id: Date.now().toString() };
+      methods.push(newMethod);
+      localStorage.setItem(`withdrawal_methods_${userId}`, JSON.stringify(methods));
+      return { status: 'ok', method: newMethod };
     }
   },
 

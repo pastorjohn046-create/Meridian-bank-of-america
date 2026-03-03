@@ -26,6 +26,7 @@ function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isOnline, setIsOnline] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const currentUserRef = useRef<any>(null);
 
@@ -70,10 +71,12 @@ function AppContent() {
 
     socket.onopen = () => {
       console.log('Connected to notifications');
+      setIsOnline(true);
     };
 
     socket.onerror = (error) => {
       console.warn('WebSocket connection failed. Notifications will be disabled.');
+      setIsOnline(false);
     };
 
     socket.onmessage = (event) => {
@@ -138,6 +141,12 @@ function AppContent() {
       )}>
         {showHeader && <Header onOpenChat={() => setIsChatOpen(true)} />}
         
+        {!isOnline && (
+          <div className="bg-amber-500/10 border-y border-amber-500/20 py-1 px-4 flex items-center justify-between">
+            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Static Mode Active</p>
+            <p className="text-[8px] text-amber-500/80">Data saved locally in browser</p>
+          </div>
+        )}
         <main className={cn(
           "flex-1 overflow-y-auto no-scrollbar",
           showHeader ? "pt-2" : ""
