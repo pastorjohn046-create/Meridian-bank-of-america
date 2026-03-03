@@ -21,8 +21,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData)
       });
-      if (!response.ok) throw new Error('API failed');
-      return await response.json();
+      const data = await response.json();
+      if (!response.ok) return { status: 'error', message: data.message || 'Registration failed' };
+      return data;
     } catch (error) {
       console.warn('Using local storage for registration');
       const newUser = {

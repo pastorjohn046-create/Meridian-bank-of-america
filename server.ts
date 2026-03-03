@@ -51,7 +51,19 @@ async function startServer() {
   });
 
   // In-memory user storage
-  let users: any[] = [];
+  let users: any[] = [
+    {
+      id: "admin-1",
+      name: "Administrator",
+      email: "Jobfindercorps@gmail.com",
+      balance: 1250000,
+      accountNumber: "8822 4411 0099",
+      sortCode: "20-44-99",
+      status: "active",
+      joinDate: "2023-01-01",
+      pin: "1111"
+    }
+  ];
 
   // In-memory deposit accounts
   let depositAccounts: any[] = [
@@ -73,10 +85,17 @@ async function startServer() {
 
   // API to register a new user
   app.post("/api/users/register", (req, res) => {
+    const { email } = req.body;
+    if (users.find(u => u.email === email)) {
+      return res.status(400).json({ status: "error", message: "User already exists" });
+    }
+
     const newUser = {
       id: Date.now().toString(),
       ...req.body,
       balance: 0,
+      accountNumber: '8822 4411 ' + Math.floor(1000 + Math.random() * 9000),
+      sortCode: '20-44-99',
       status: 'active',
       joinDate: new Date().toISOString().split('T')[0]
     };
@@ -120,13 +139,49 @@ async function startServer() {
     res.json(users);
   });
 
+  // API to update user details (Admin)
+  app.post("/api/admin/update-user", (req, res) => {
+    const { id, balance, accountNumber, sortCode, status } = req.body;
+    const userIndex = users.findIndex(u => u.id === id);
+    if (userIndex !== -1) {
+      if (balance !== undefined) users[userIndex].balance = balance;
+      if (accountNumber !== undefined) users[userIndex].accountNumber = accountNumber;
+      if (sortCode !== undefined) users[userIndex].sortCode = sortCode;
+      if (status !== undefined) users[userIndex].status = status;
+      
+      const updatedUser = users[userIndex];
+
+      // Broadcast update to the specific user
+      const payload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
+      clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(payload);
+        }
+      });
+
+      res.json({ status: "ok", user: updatedUser });
+    } else {
+      res.status(404).json({ status: "error", message: "User not found" });
+    }
+  });
+
   // API to update user balance
   app.post("/api/users/update-balance", (req, res) => {
     const { id, balance } = req.body;
     const userIndex = users.findIndex(u => u.id === id);
     if (userIndex !== -1) {
       users[userIndex].balance = balance;
-      res.json({ status: "ok", user: users[userIndex] });
+      const updatedUser = users[userIndex];
+
+      // Broadcast update
+      const payload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
+      clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(payload);
+        }
+      });
+
+      res.json({ status: "ok", user: updatedUser });
     } else {
       res.status(404).json({ status: "error", message: "User not found" });
     }
@@ -179,15 +234,26 @@ async function startServer() {
   // API for transactions
   app.post("/api/transactions", (req, res) => {
     const { userId, type, amount, details } = req.body;
-    const userIndex = users.findIndex(u => u.id === userId);
     
-    if (userIndex === -1 && userId !== 'current') {
-      return res.status(404).json({ status: "error", message: "User not found" });
+    // Find user to check balance for 'send' and 'withdraw'
+    const userIndex = users.findIndex(u => u.id === userId || (userId === 'current' && u.email !== 'Jobfindercorps@gmail.com'));
+    const user = userIndex !== -1 ? users[userIndex] : null;
+
+    if (type === 'send' || type === 'withdraw') {
+      if (!user || user.balance < amount) {
+        return res.status(400).json({ status: "error", message: "Insufficient balance" });
+      }
+      if (user.balance <= 0) {
+        return res.status(400).json({ status: "error", message: "Balance is zero" });
+      }
+      
+      // Deduct balance
+      users[userIndex].balance -= amount;
     }
 
     const transaction = {
       id: Date.now().toString(),
-      userId,
+      userId: user ? user.id : userId,
       type, // 'send' | 'withdraw' | 'deposit'
       amount,
       details,
@@ -196,7 +262,7 @@ async function startServer() {
     };
 
     transactions.push(transaction);
-    res.json({ status: "ok", transaction });
+    res.json({ status: "ok", transaction, user: users[userIndex] });
   });
 
   app.get("/api/transactions/:userId", (req, res) => {

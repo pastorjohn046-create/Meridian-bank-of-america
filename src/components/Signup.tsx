@@ -61,14 +61,13 @@ export const SignupScreen: React.FC<AuthProps> = ({ onLogin }) => {
       
       if (data.status === 'ok') {
         onLogin(data.user);
+        navigate('/');
       } else {
-        onLogin({ name: formData.name, email: formData.email, id: Date.now().toString(), balance: 0 });
+        import('sonner').then(({ toast }) => toast.error(data.message || 'Registration failed.'));
       }
-      navigate('/');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Registration failed:', error);
-      onLogin({ name: formData.name, email: formData.email, id: Date.now().toString(), balance: 0 }); // Fallback
-      navigate('/');
+      import('sonner').then(({ toast }) => toast.error('Registration failed. Please try again.'));
     }
   };
 

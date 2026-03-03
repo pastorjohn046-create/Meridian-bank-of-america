@@ -25,6 +25,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ user, isOpen, onClose }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -43,6 +44,11 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ user, isOpen, onClose }) => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}`;
       const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        setIsConnected(true);
+        console.log('Chat connected');
+      };
 
       ws.onmessage = (event) => {
         try {
@@ -63,6 +69,11 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ user, isOpen, onClose }) => {
         }
       };
 
+      ws.onclose = () => {
+        setIsConnected(false);
+        console.log('Chat disconnected');
+      };
+
       setSocket(ws);
       return () => ws.close();
     }
@@ -73,13 +84,13 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ user, isOpen, onClose }) => {
   }, [messages]);
 
   const handleSendMessage = () => {
-    if (!inputText.trim() || !socket) return;
+    if (!inputText.trim() || !socket || socket.readyState !== WebSocket.OPEN) return;
 
     const messageData = {
       userId: user.id,
       senderName: user.name,
       text: inputText,
-      isAdmin: false
+      isAdmin: user.email === 'Jobfindercorps@gmail.com'
     };
 
     socket.send(JSON.stringify({
@@ -110,7 +121,10 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ user, isOpen, onClose }) => {
               </div>
               <div>
                 <p className="text-xs font-bold">Meridian Support</p>
-                <p className="text-[9px] opacity-80">Always active for you</p>
+                <div className="flex items-center gap-1">
+                  <div className={cn("w-1 h-1 rounded-full animate-pulse", isConnected ? "bg-emerald-400" : "bg-red-400")} />
+                  <p className="text-[9px] opacity-80">{isConnected ? 'Always active for you' : 'Connecting...'}</p>
+                </div>
               </div>
             </div>
             <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full transition-colors">

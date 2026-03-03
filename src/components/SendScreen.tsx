@@ -6,7 +6,12 @@ import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 
-export const SendScreen: React.FC = () => {
+interface SendScreenProps {
+  user: any;
+  onUpdateUser: (user: any) => void;
+}
+
+export const SendScreen: React.FC<SendScreenProps> = ({ user, onUpdateUser }) => {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [step, setStep] = useState<'recipient' | 'amount' | 'confirm' | 'success'>('recipient');
@@ -16,11 +21,23 @@ export const SendScreen: React.FC = () => {
 
   const handleSend = async () => {
     setIsLoading(true);
+    if (user && user.balance < parseFloat(amount)) {
+      toast.error('Insufficient balance for this transaction.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (user && user.balance <= 0) {
+      toast.error('Your balance is zero. Please deposit funds to send money.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      await fetch('/api/transactions', {
+      const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -30,6 +47,13 @@ export const SendScreen: React.FC = () => {
           details: { recipient }
         })
       });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.user) {
+          onUpdateUser(result.user);
+        }
+      }
 
       await fetch('/api/notify', {
         method: 'POST',

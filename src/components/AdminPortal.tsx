@@ -34,6 +34,8 @@ interface UserAccount {
   phone?: string;
   pin?: string;
   balance: number;
+  accountNumber?: string;
+  sortCode?: string;
   status: 'active' | 'suspended';
   joinDate: string;
 }
@@ -45,7 +47,15 @@ export const AdminPortal: React.FC = () => {
   const [cryptoWallets, setCryptoWallets] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
+  const editingUserRef = React.useRef<UserAccount | null>(null);
+
+  React.useEffect(() => {
+    editingUserRef.current = editingUser;
+  }, [editingUser]);
+
   const [adjustmentAmount, setAdjustmentAmount] = useState('');
+  const [editAccountNumber, setEditAccountNumber] = useState('');
+  const [editSortCode, setEditSortCode] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'users' | 'deposits' | 'crypto' | 'support'>('users');
   const [allMessages, setAllMessages] = useState<any[]>([]);
@@ -111,6 +121,14 @@ export const AdminPortal: React.FC = () => {
           toast.info(`User logged in: ${message.data.name}`);
           // Optionally update user status or last login time in the list
           setUsers(prev => prev.map(u => u.id === message.data.id ? { ...u, lastLogin: message.data.lastLogin } : u));
+        } else if (message.type === 'USER_UPDATED') {
+          setUsers(prev => prev.map(u => u.id === message.data.id ? message.data : u));
+          if (editingUserRef.current && editingUserRef.current.id === message.data.id) {
+            setEditingUser(message.data);
+            // Update input fields if they are currently editing this user
+            setEditAccountNumber(message.data.accountNumber || '');
+            setEditSortCode(message.data.sortCode || '');
+          }
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);
@@ -232,6 +250,31 @@ export const AdminPortal: React.FC = () => {
     u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     u.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleUpdateUserDetails = async () => {
+    if (!editingUser) return;
+
+    try {
+      const response = await fetch('/api/admin/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: editingUser.id, 
+          accountNumber: editAccountNumber, 
+          sortCode: editSortCode 
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setUsers(users.map(u => u.id === editingUser.id ? result.user : u));
+        setEditingUser(result.user);
+        toast.success('User details updated successfully');
+      }
+    } catch (error) {
+      toast.error('Failed to update user details');
+    }
+  };
 
   const handleAdjustBalance = async (type: 'increase' | 'reduce') => {
     if (!editingUser || !adjustmentAmount) return;
@@ -365,7 +408,11 @@ export const AdminPortal: React.FC = () => {
               {filteredUsers.map((user) => (
                 <div 
                   key={user.id}
-                  onClick={() => setEditingUser(user)}
+                  onClick={() => {
+                    setEditingUser(user);
+                    setEditAccountNumber(user.accountNumber || '');
+                    setEditSortCode(user.sortCode || '');
+                  }}
                   className={cn(
                     "p-3 rounded-xl border transition-all cursor-pointer group flex items-center justify-between",
                     theme === 'dark' ? "bg-zinc-900/50 border-zinc-800 hover:bg-zinc-800" : "bg-white border-gray-100 shadow-sm hover:shadow-md"
@@ -825,69 +872,108 @@ export const AdminPortal: React.FC = () => {
               </button>
             </div>
 
-            <div className={cn("p-4 rounded-2xl text-center space-y-1", theme === 'dark' ? "bg-zinc-800" : "bg-gray-50")}>
-              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Current Balance</p>
-              <p className={cn("text-2xl font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>${editingUser.balance.toLocaleString()}</p>
-            </div>
+            <div className="overflow-y-auto max-h-[60vh] pr-2 space-y-6 no-scrollbar">
+              <div className={cn("p-4 rounded-2xl text-center space-y-1", theme === 'dark' ? "bg-zinc-800" : "bg-gray-50")}>
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Current Balance</p>
+                <p className={cn("text-2xl font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>${editingUser.balance.toLocaleString()}</p>
+              </div>
 
-            <div className="space-y-3">
-              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Registration Details</p>
-              <div className="grid grid-cols-1 gap-2">
-                <div className={cn("p-3 rounded-xl flex items-center gap-3", theme === 'dark' ? "bg-zinc-800/50" : "bg-gray-50")}>
-                  <Mail size={14} className="text-gray-400" />
-                  <p className="text-[10px] font-medium">{editingUser.email}</p>
+              <div className="space-y-3">
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Adjust Balance</p>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+                    <input 
+                      type="number" 
+                      placeholder="0.00"
+                      value={adjustmentAmount}
+                      onChange={(e) => setAdjustmentAmount(e.target.value)}
+                      className={cn(
+                        "w-full pl-7 pr-4 py-3 rounded-xl text-sm font-bold outline-none",
+                        theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-100" : "bg-gray-100 border border-gray-200 text-gray-900"
+                      )}
+                    />
+                  </div>
                 </div>
-                {editingUser.phone && (
-                  <div className={cn("p-3 rounded-xl flex items-center gap-3", theme === 'dark' ? "bg-zinc-800/50" : "bg-gray-50")}>
-                    <Phone size={14} className="text-gray-400" />
-                    <p className="text-[10px] font-medium">{editingUser.phone}</p>
-                  </div>
-                )}
-                {editingUser.pin && (
-                  <div className={cn("p-3 rounded-xl flex items-center gap-3", theme === 'dark' ? "bg-zinc-800/50" : "bg-gray-50")}>
-                    <Key size={14} className="text-gray-400" />
-                    <p className="text-[10px] font-medium">Security PIN: {editingUser.pin}</p>
-                  </div>
-                )}
-                <div className={cn("p-3 rounded-xl flex items-center gap-3", theme === 'dark' ? "bg-zinc-800/50" : "bg-gray-50")}>
-                  <Calendar size={14} className="text-gray-400" />
-                  <p className="text-[10px] font-medium">Joined: {editingUser.joinDate}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={() => handleAdjustBalance('increase')}
+                    className="py-3.5 bg-emerald-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                  >
+                    <ArrowUpCircle size={16} />
+                    Increase
+                  </button>
+                  <button 
+                    onClick={() => handleAdjustBalance('reduce')}
+                    className="py-3.5 bg-red-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+                  >
+                    <ArrowDownCircle size={16} />
+                    Reduce
+                  </button>
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-3">
-              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Adjust Balance</p>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
-                  <input 
-                    type="number" 
-                    placeholder="0.00"
-                    value={adjustmentAmount}
-                    onChange={(e) => setAdjustmentAmount(e.target.value)}
-                    className={cn(
-                      "w-full pl-7 pr-4 py-3 rounded-xl text-sm font-bold outline-none",
-                      theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-100" : "bg-gray-100 border border-gray-200 text-gray-900"
-                    )}
-                  />
+              <div className="space-y-3">
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Account Details</p>
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">Account Number</label>
+                    <input 
+                      type="text" 
+                      value={editAccountNumber}
+                      onChange={(e) => setEditAccountNumber(e.target.value)}
+                      className={cn(
+                        "w-full px-4 py-2.5 rounded-xl text-[11px] font-mono outline-none",
+                        theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-100" : "bg-gray-100 border border-gray-200 text-gray-900"
+                      )}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">Sort Code</label>
+                    <input 
+                      type="text" 
+                      value={editSortCode}
+                      onChange={(e) => setEditSortCode(e.target.value)}
+                      className={cn(
+                        "w-full px-4 py-2.5 rounded-xl text-[11px] font-mono outline-none",
+                        theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-100" : "bg-gray-100 border border-gray-200 text-gray-900"
+                      )}
+                    />
+                  </div>
+                  <button 
+                    onClick={handleUpdateUserDetails}
+                    className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+                  >
+                    <Save size={14} />
+                    Update Details
+                  </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button 
-                  onClick={() => handleAdjustBalance('increase')}
-                  className="py-3.5 bg-emerald-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
-                >
-                  <ArrowUpCircle size={16} />
-                  Increase
-                </button>
-                <button 
-                  onClick={() => handleAdjustBalance('reduce')}
-                  className="py-3.5 bg-red-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 active:scale-95 transition-all"
-                >
-                  <ArrowDownCircle size={16} />
-                  Reduce
-                </button>
+
+              <div className="space-y-3">
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Registration Details</p>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className={cn("p-3 rounded-xl flex items-center gap-3", theme === 'dark' ? "bg-zinc-800/50" : "bg-gray-50")}>
+                    <Mail size={14} className="text-gray-400" />
+                    <p className="text-[10px] font-medium">{editingUser.email}</p>
+                  </div>
+                  {editingUser.phone && (
+                    <div className={cn("p-3 rounded-xl flex items-center gap-3", theme === 'dark' ? "bg-zinc-800/50" : "bg-gray-50")}>
+                      <Phone size={14} className="text-gray-400" />
+                      <p className="text-[10px] font-medium">{editingUser.phone}</p>
+                    </div>
+                  )}
+                  {editingUser.pin && (
+                    <div className={cn("p-3 rounded-xl flex items-center gap-3", theme === 'dark' ? "bg-zinc-800/50" : "bg-gray-50")}>
+                      <Key size={14} className="text-gray-400" />
+                      <p className="text-[10px] font-medium">Security PIN: {editingUser.pin}</p>
+                    </div>
+                  )}
+                  <div className={cn("p-3 rounded-xl flex items-center gap-3", theme === 'dark' ? "bg-zinc-800/50" : "bg-gray-50")}>
+                    <Calendar size={14} className="text-gray-400" />
+                    <p className="text-[10px] font-medium">Joined: {editingUser.joinDate}</p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -898,8 +984,7 @@ export const AdminPortal: React.FC = () => {
                 theme === 'dark' ? "bg-zinc-800 text-zinc-100" : "bg-gray-100 text-gray-900"
               )}
             >
-              <Save size={16} />
-              Done
+              Close
             </button>
           </motion.div>
         </div>

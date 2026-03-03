@@ -35,9 +35,37 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin, user, onLogout,
   const userEmail = user?.email || 'guest@meridian.com';
   const userSeed = userName.split(' ')[0];
 
+  const accountNumber = user?.accountNumber || '8822 4411 0099';
+  const sortCode = user?.sortCode || '20-44-99';
+
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied to clipboard`);
+  };
+
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [newAccountNumber, setNewAccountNumber] = React.useState(accountNumber);
+  const [newSortCode, setNewSortCode] = React.useState(sortCode);
+
+  const handleUpdateDetails = async () => {
+    try {
+      const response = await fetch('/api/admin/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: user.id, 
+          accountNumber: newAccountNumber, 
+          sortCode: newSortCode 
+        })
+      });
+      
+      if (response.ok) {
+        setIsEditing(false);
+        toast.success('Account details updated live');
+      }
+    } catch (error) {
+      toast.error('Failed to update details');
+    }
   };
 
   const menuItems = [
@@ -88,29 +116,87 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin, user, onLogout,
       {/* Account Details */}
       <div className={cn("rounded-2xl p-4 space-y-3", theme === 'dark' ? "bg-zinc-900/50 border border-zinc-800" : "bg-gray-50")}>
         <div className="flex justify-between items-center">
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 flex-1">
             <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Account Number</p>
-            <p className={cn("text-[11px] font-mono font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>8822 4411 0099</p>
+            {isEditing ? (
+              <input 
+                type="text"
+                value={newAccountNumber}
+                onChange={(e) => setNewAccountNumber(e.target.value)}
+                className={cn(
+                  "w-full px-2 py-1 rounded-lg text-[11px] font-mono font-bold outline-none border",
+                  theme === 'dark' ? "bg-zinc-800 border-zinc-700 text-zinc-100" : "bg-white border-gray-200 text-gray-900"
+                )}
+              />
+            ) : (
+              <p className={cn("text-[11px] font-mono font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{accountNumber}</p>
+            )}
           </div>
-          <button 
-            onClick={() => copyToClipboard('8822 4411 0099', 'Account Number')}
-            className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-white text-gray-400")}
-          >
-            <Copy size={14} />
-          </button>
+          <div className="flex gap-1">
+            {isAdmin && !isEditing && (
+              <button 
+                onClick={() => setIsEditing(true)}
+                className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? "bg-zinc-800 text-indigo-400" : "bg-white text-indigo-500")}
+              >
+                <Settings size={14} />
+              </button>
+            )}
+            {!isEditing && (
+              <button 
+                onClick={() => copyToClipboard(accountNumber, 'Account Number')}
+                className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-white text-gray-400")}
+              >
+                <Copy size={14} />
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex justify-between items-center">
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 flex-1">
             <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Sort Code</p>
-            <p className={cn("text-[11px] font-mono font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>20-44-99</p>
+            {isEditing ? (
+              <input 
+                type="text"
+                value={newSortCode}
+                onChange={(e) => setNewSortCode(e.target.value)}
+                className={cn(
+                  "w-full px-2 py-1 rounded-lg text-[11px] font-mono font-bold outline-none border",
+                  theme === 'dark' ? "bg-zinc-800 border-zinc-700 text-zinc-100" : "bg-white border-gray-200 text-gray-900"
+                )}
+              />
+            ) : (
+              <p className={cn("text-[11px] font-mono font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{sortCode}</p>
+            )}
           </div>
-          <button 
-            onClick={() => copyToClipboard('20-44-99', 'Sort Code')}
-            className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-white text-gray-400")}
-          >
-            <Copy size={14} />
-          </button>
+          {!isEditing && (
+            <button 
+              onClick={() => copyToClipboard(sortCode, 'Sort Code')}
+              className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-white text-gray-400")}
+            >
+              <Copy size={14} />
+            </button>
+          )}
         </div>
+
+        {isEditing && (
+          <div className="flex gap-2 pt-2">
+            <button 
+              onClick={handleUpdateDetails}
+              className="flex-1 py-2 bg-indigo-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+            >
+              Save Changes
+            </button>
+            <button 
+              onClick={() => setIsEditing(false)}
+              className={cn(
+                "flex-1 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all",
+                theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-200 text-gray-600"
+              )}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Menu Sections */}

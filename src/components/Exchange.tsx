@@ -105,6 +105,14 @@ export const ExchangeScreen: React.FC<ExchangeProps> = ({ user }) => {
 
       <button 
         onClick={async () => {
+          if (user && user.balance <= 0) {
+            import('sonner').then(({ toast }) => toast.error('Your balance is zero. Please deposit funds to exchange assets.'));
+            return;
+          }
+          if (amount && user && user.balance < parseFloat(amount)) {
+             import('sonner').then(({ toast }) => toast.error('Insufficient balance for this exchange.'));
+             return;
+          }
           try {
             await fetch('/api/notify', {
               method: 'POST',

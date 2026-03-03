@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ArrowDownLeft, Building2, CheckCircle2 } from 'lucide-react';
@@ -6,21 +6,54 @@ import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 
-export const WithdrawScreen: React.FC = () => {
+interface WithdrawScreenProps {
+  user: any;
+  onUpdateUser: (user: any) => void;
+}
+
+export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUser }) => {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [step, setStep] = useState<'method' | 'amount' | 'confirm' | 'success'>('method');
   const [method, setMethod] = useState('');
   const [amount, setAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [depositAccounts, setDepositAccounts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const response = await fetch('/api/deposit-accounts');
+        if (response.ok) {
+          const data = await response.json();
+          setDepositAccounts(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch deposit accounts:', error);
+      }
+    };
+    fetchAccounts();
+  }, []);
 
   const handleWithdraw = async () => {
     setIsLoading(true);
+    if (user && user.balance < parseFloat(amount)) {
+      toast.error('Insufficient balance for this withdrawal.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (user && user.balance <= 0) {
+      toast.error('Your balance is zero. Please deposit funds to withdraw money.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      await fetch('/api/transactions', {
+      const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -30,6 +63,13 @@ export const WithdrawScreen: React.FC = () => {
           details: { method }
         })
       });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.user) {
+          onUpdateUser(result.user);
+        }
+      }
 
       await fetch('/api/notify', {
         method: 'POST',
@@ -83,30 +123,37 @@ export const WithdrawScreen: React.FC = () => {
             <div className="space-y-2">
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Select Withdrawal Method</p>
               <div className="space-y-2">
-                {[
-                  { id: 'bank', label: 'Bank Transfer', icon: Building2, desc: '2-3 business days' },
-                  { id: 'card', label: 'Debit Card', icon: Building2, desc: 'Instant' },
-                ].map((m, i) => (
-                  <button 
-                    key={i} 
-                    onClick={() => {
-                      setMethod(m.label);
-                      setStep('amount');
-                    }}
-                    className={cn(
-                      "w-full p-4 rounded-2xl border flex items-center gap-4 transition-all active:scale-95",
-                      theme === 'dark' ? "bg-zinc-900 border-zinc-800 hover:bg-zinc-800" : "bg-gray-50 border-gray-100 hover:bg-gray-100"
-                    )}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-600">
-                      <m.icon size={20} />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-bold">{m.label}</p>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">{m.desc}</p>
-                    </div>
-                  </button>
-                ))}
+                {depositAccounts.length === 0 ? (
+                  <div className={cn(
+                    "p-8 rounded-2xl border-2 border-dashed text-center space-y-2",
+                    theme === 'dark' ? "border-zinc-800 bg-zinc-900/20" : "border-gray-100 bg-gray-50/50"
+                  )}>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">No Withdrawal Methods</p>
+                    <p className="text-[8px] text-gray-400">Please contact support to add a withdrawal method.</p>
+                  </div>
+                ) : (
+                  depositAccounts.map((m, i) => (
+                    <button 
+                      key={i} 
+                      onClick={() => {
+                        setMethod(`${m.bankName} (${m.accountNumber})`);
+                        setStep('amount');
+                      }}
+                      className={cn(
+                        "w-full p-4 rounded-2xl border flex items-center gap-4 transition-all active:scale-95",
+                        theme === 'dark' ? "bg-zinc-900 border-zinc-800 hover:bg-zinc-800" : "bg-gray-50 border-gray-100 hover:bg-gray-100"
+                      )}
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-600">
+                        <Building2 size={20} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-bold">{m.bankName}</p>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">{m.accountNumber} • {m.accountName}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { BottomNav } from './components/BottomNav';
 import { Header } from './components/Header';
@@ -27,6 +27,11 @@ function AppContent() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const currentUserRef = useRef<any>(null);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('meridian_user');
@@ -41,7 +46,13 @@ function AppContent() {
   const handleLogin = (user: any, admin?: boolean) => {
     setCurrentUser(user);
     setIsAuthenticated(true);
-    setIsAdmin(!!admin);
+    setIsAdmin(!!admin || user.email === 'Jobfindercorps@gmail.com');
+    localStorage.setItem('meridian_user', JSON.stringify(user));
+  };
+
+  const updateUser = (user: any) => {
+    if (!user) return;
+    setCurrentUser(user);
     localStorage.setItem('meridian_user', JSON.stringify(user));
   };
 
@@ -74,6 +85,15 @@ function AppContent() {
             description: `${text} ${amount ? `(${amount} ${asset})` : ''}`,
             duration: 5000,
           });
+        } else if (message.type === 'USER_UPDATED') {
+          const updatedUser = message.data;
+          // Only update if it's the current user
+          if (currentUserRef.current && updatedUser.id === currentUserRef.current.id) {
+            updateUser(updatedUser);
+            toast.info('Account Updated', {
+              description: 'Your account details or balance have been updated by the system.',
+            });
+          }
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);
@@ -118,8 +138,8 @@ function AppContent() {
               <Route path="/market" element={isAuthenticated ? <MarketScreen user={currentUser} /> : <Navigate to="/login" />} />
               <Route path="/profile" element={isAuthenticated ? <ProfileScreen isAdmin={isAdmin} user={currentUser} onLogout={handleLogout} onOpenChat={() => setIsChatOpen(true)} /> : <Navigate to="/login" />} />
               <Route path="/admin" element={isAuthenticated && isAdmin ? <AdminPortal /> : <Navigate to="/" />} />
-              <Route path="/send" element={isAuthenticated ? <SendScreen /> : <Navigate to="/login" />} />
-              <Route path="/withdraw" element={isAuthenticated ? <WithdrawScreen /> : <Navigate to="/login" />} />
+              <Route path="/send" element={isAuthenticated ? <SendScreen user={currentUser} onUpdateUser={updateUser} /> : <Navigate to="/login" />} />
+              <Route path="/withdraw" element={isAuthenticated ? <WithdrawScreen user={currentUser} onUpdateUser={updateUser} /> : <Navigate to="/login" />} />
               <Route path="/transaction/:id" element={isAuthenticated ? <TransactionDetails /> : <Navigate to="/login" />} />
             </Routes>
           </AnimatePresence>

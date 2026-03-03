@@ -26,7 +26,9 @@ export const LoginScreen: React.FC<AuthProps> = ({ onLogin }) => {
       const isAdmin = email === 'Jobfindercorps@gmail.com' && password === 'Revelation111';
       
       if (isAdmin) {
-        onLogin({ email, name: 'Administrator' }, true);
+        // Try to find admin in the users list
+        const adminUser = await fetch('/api/users').then(res => res.json()).then(users => users.find((u: any) => u.email === email));
+        onLogin(adminUser || { email, name: 'Administrator', id: 'admin-1' }, true);
         navigate('/');
         return;
       }
