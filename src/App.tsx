@@ -103,6 +103,23 @@ function AppContent() {
     return () => socket.close();
   }, []);
 
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'meridian_user') {
+        if (e.newValue) {
+          setCurrentUser(JSON.parse(e.newValue));
+        } else {
+          setCurrentUser(null);
+          setIsAuthenticated(false);
+          setIsAdmin(false);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   // Hide header and bottom nav on auth pages
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
   const showBottomNav = isAuthenticated && !isAuthPage && !location.pathname.startsWith('/transaction/');
@@ -137,7 +154,7 @@ function AppContent() {
               <Route path="/exchange" element={isAuthenticated ? <ExchangeScreen user={currentUser} /> : <Navigate to="/login" />} />
               <Route path="/market" element={isAuthenticated ? <MarketScreen user={currentUser} /> : <Navigate to="/login" />} />
               <Route path="/profile" element={isAuthenticated ? <ProfileScreen isAdmin={isAdmin} user={currentUser} onLogout={handleLogout} onOpenChat={() => setIsChatOpen(true)} /> : <Navigate to="/login" />} />
-              <Route path="/admin" element={isAuthenticated && isAdmin ? <AdminPortal /> : <Navigate to="/" />} />
+              <Route path="/admin" element={isAuthenticated && isAdmin ? <AdminPortal onUpdateUser={updateUser} currentUser={currentUser} /> : <Navigate to="/" />} />
               <Route path="/send" element={isAuthenticated ? <SendScreen user={currentUser} onUpdateUser={updateUser} /> : <Navigate to="/login" />} />
               <Route path="/withdraw" element={isAuthenticated ? <WithdrawScreen user={currentUser} onUpdateUser={updateUser} /> : <Navigate to="/login" />} />
               <Route path="/transaction/:id" element={isAuthenticated ? <TransactionDetails /> : <Navigate to="/login" />} />

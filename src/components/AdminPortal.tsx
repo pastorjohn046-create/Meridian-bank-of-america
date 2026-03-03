@@ -27,6 +27,8 @@ import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
+import { api } from '../services/api';
+
 interface UserAccount {
   id: string;
   name: string;
@@ -40,7 +42,12 @@ interface UserAccount {
   joinDate: string;
 }
 
-export const AdminPortal: React.FC = () => {
+interface AdminPortalProps {
+  onUpdateUser?: (user: any) => void;
+  currentUser?: any;
+}
+
+export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentUser }) => {
   const { theme } = useTheme();
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [depositAccounts, setDepositAccounts] = useState<any[]>([]);
@@ -73,16 +80,12 @@ export const AdminPortal: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [usersRes, depositsRes, cryptoRes, messagesRes] = await Promise.all([
-        fetch('/api/users'),
-        fetch('/api/deposit-accounts'),
-        fetch('/api/crypto-wallets'),
-        fetch('/api/messages/admin')
+      const [usersData, depositsData, cryptoData, messagesData] = await Promise.all([
+        api.getUsers(),
+        api.getDepositAccounts(),
+        api.getCryptoWallets(),
+        api.getMessages('admin')
       ]);
-      const usersData = await usersRes.json();
-      const depositsData = await depositsRes.json();
-      const cryptoData = await cryptoRes.json();
-      const messagesData = await messagesRes.json();
       setUsers(usersData);
       setDepositAccounts(depositsData);
       setCryptoWallets(cryptoData);
@@ -129,6 +132,12 @@ export const AdminPortal: React.FC = () => {
             setEditAccountNumber(message.data.accountNumber || '');
             setEditSortCode(message.data.sortCode || '');
           }
+        } else if (message.type === 'DEPOSIT_ACCOUNTS_UPDATED') {
+          setDepositAccounts(message.data);
+          toast.info('Deposit accounts updated');
+        } else if (message.type === 'CRYPTO_WALLETS_UPDATED') {
+          setCryptoWallets(message.data);
+          toast.info('Crypto wallets updated');
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);
@@ -142,13 +151,8 @@ export const AdminPortal: React.FC = () => {
   const handleAddDepositAccount = async () => {
     if (!newAccount.bankName || !newAccount.accountNumber) return;
     try {
-      const response = await fetch('/api/admin/deposit-accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newAccount)
-      });
-      if (response.ok) {
-        const result = await response.json();
+      const result = await api.addDepositAccount(newAccount);
+      if (result.status === 'ok') {
         setDepositAccounts([...depositAccounts, result.account]);
         setNewAccount({ bankName: '', accountName: '', accountNumber: '', type: 'Checking' });
         toast.success('Deposit account added');
@@ -160,8 +164,8 @@ export const AdminPortal: React.FC = () => {
 
   const handleDeleteDepositAccount = async (id: string) => {
     try {
-      const response = await fetch(`/api/admin/deposit-accounts/${id}`, { method: 'DELETE' });
-      if (response.ok) {
+      const result = await api.deleteDepositAccount(id);
+      if (result.status === 'ok') {
         setDepositAccounts(depositAccounts.filter(a => a.id !== id));
         toast.success('Account removed');
       }
@@ -173,13 +177,8 @@ export const AdminPortal: React.FC = () => {
   const handleAddCryptoWallet = async () => {
     if (!newWallet.coin || !newWallet.address) return;
     try {
-      const response = await fetch('/api/admin/crypto-wallets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newWallet)
-      });
-      if (response.ok) {
-        const result = await response.json();
+      const result = await api.addCryptoWallet(newWallet);
+      if (result.status === 'ok') {
         setCryptoWallets([...cryptoWallets, result.wallet]);
         setNewWallet({ coin: '', symbol: '', address: '', network: '' });
         toast.success('Crypto wallet added');
@@ -191,8 +190,8 @@ export const AdminPortal: React.FC = () => {
 
   const handleDeleteCryptoWallet = async (id: string) => {
     try {
-      const response = await fetch(`/api/admin/crypto-wallets/${id}`, { method: 'DELETE' });
-      if (response.ok) {
+      const result = await api.deleteCryptoWallet(id);
+      if (result.status === 'ok') {
         setCryptoWallets(cryptoWallets.filter(w => w.id !== id));
         toast.success('Wallet removed');
       }
@@ -204,13 +203,8 @@ export const AdminPortal: React.FC = () => {
   const handleUpdateCryptoWallet = async (id: string) => {
     if (!updatedAddress.trim()) return;
     try {
-      const response = await fetch(`/api/admin/crypto-wallets/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: updatedAddress })
-      });
-      if (response.ok) {
-        const result = await response.json();
+      const result = await api.updateCryptoWallet(id, updatedAddress);
+      if (result.status === 'ok') {
         setCryptoWallets(cryptoWallets.map(w => w.id === id ? result.wallet : w));
         setEditingWalletId(null);
         setUpdatedAddress('');
@@ -255,20 +249,20 @@ export const AdminPortal: React.FC = () => {
     if (!editingUser) return;
 
     try {
-      const response = await fetch('/api/admin/update-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          id: editingUser.id, 
-          accountNumber: editAccountNumber, 
-          sortCode: editSortCode 
-        })
+      const result = await api.updateUserDetails(editingUser.id, {
+        accountNumber: editAccountNumber,
+        sortCode: editSortCode
       });
       
-      if (response.ok) {
-        const result = await response.json();
+      if (result.status === 'ok') {
         setUsers(users.map(u => u.id === editingUser.id ? result.user : u));
         setEditingUser(result.user);
+        
+        // Update global session if it's the current user
+        if (currentUser && result.user.id === currentUser.id) {
+          onUpdateUser?.(result.user);
+        }
+        
         toast.success('User details updated successfully');
       }
     } catch (error) {
@@ -286,16 +280,17 @@ export const AdminPortal: React.FC = () => {
     const finalBalance = Math.max(0, newBalance);
 
     try {
-      const response = await fetch('/api/users/update-balance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingUser.id, balance: finalBalance })
-      });
+      const result = await api.updateBalance(editingUser.id, finalBalance);
       
-      if (response.ok) {
-        const result = await response.json();
+      if (result.status === 'ok') {
         setUsers(users.map(u => u.id === editingUser.id ? result.user : u));
         setEditingUser(result.user);
+        
+        // Update global session if it's the current user
+        if (currentUser && result.user.id === currentUser.id) {
+          onUpdateUser?.(result.user);
+        }
+        
         setAdjustmentAmount('');
         toast.success(`Balance ${type === 'increase' ? 'increased' : 'reduced'} successfully`);
       }

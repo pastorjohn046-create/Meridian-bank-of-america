@@ -21,6 +21,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 
+import { api } from '../services/api';
+
 interface ProfileProps {
   isAdmin?: boolean;
   user: any;
@@ -49,17 +51,12 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin, user, onLogout,
 
   const handleUpdateDetails = async () => {
     try {
-      const response = await fetch('/api/admin/update-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          id: user.id, 
-          accountNumber: newAccountNumber, 
-          sortCode: newSortCode 
-        })
+      const result = await api.updateUserDetails(user.id, {
+        accountNumber: newAccountNumber,
+        sortCode: newSortCode
       });
       
-      if (response.ok) {
+      if (result.status === 'ok') {
         setIsEditing(false);
         toast.success('Account details updated live');
       }
@@ -110,6 +107,9 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin, user, onLogout,
         <div>
           <h3 className={cn("text-lg font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{userName}</h3>
           <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest">{isAdmin ? 'System Administrator' : 'Private Tier Member'}</p>
+          <p className={cn("text-sm font-bold mt-1 transition-colors", theme === 'dark' ? "text-emerald-400" : "text-emerald-600")}>
+            ${(user?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </p>
         </div>
       </div>
 

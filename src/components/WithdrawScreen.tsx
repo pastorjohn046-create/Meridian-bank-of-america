@@ -6,6 +6,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 
+import { api } from '../services/api';
+
 interface WithdrawScreenProps {
   user: any;
   onUpdateUser: (user: any) => void;
@@ -23,16 +25,31 @@ export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUs
   useEffect(() => {
     const fetchAccounts = async () => {
       try {
-        const response = await fetch('/api/deposit-accounts');
-        if (response.ok) {
-          const data = await response.json();
-          setDepositAccounts(data);
-        }
+        const data = await api.getDepositAccounts();
+        setDepositAccounts(data);
       } catch (error) {
         console.error('Failed to fetch deposit accounts:', error);
       }
     };
     fetchAccounts();
+
+    // WebSocket for real-time updates
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'DEPOSIT_ACCOUNTS_UPDATED') {
+          setDepositAccounts(message.data);
+        }
+      } catch (e) {
+        console.error('Failed to parse WS message', e);
+      }
+    };
+
+    return () => socket.close();
   }, []);
 
   const handleWithdraw = async () => {
@@ -53,35 +70,35 @@ export const WithdrawScreen: React.FC<WithdrawScreenProps> = ({ user, onUpdateUs
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: 'current',
-          type: 'withdraw',
-          amount: parseFloat(amount),
-          details: { method }
-        })
+      const result = await api.createTransaction({
+        userId: user?.id || 'current',
+        type: 'withdraw',
+        amount: parseFloat(amount),
+        details: { method }
       });
 
-      if (response.ok) {
-        const result = await response.json();
+      if (result.status === 'ok') {
         if (result.user) {
           onUpdateUser(result.user);
         }
       }
 
-      await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'Withdrawal Initialized',
-          message: `Your withdrawal of $${amount} to ${method} is being processed.`,
-          type: 'withdraw',
-          amount: parseFloat(amount),
-          asset: 'USD'
-        })
-      });
+      // Optional: Notify (can be ignored if API fails)
+      try {
+        await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: 'Withdrawal Initialized',
+            message: `Your withdrawal of $${amount} to ${method} is being processed.`,
+            type: 'withdraw',
+            amount: parseFloat(amount),
+            asset: 'USD'
+          })
+        });
+      } catch (e) {
+        // Ignore notification failure on static hosts
+      }
 
       setStep('success');
     } catch (error) {

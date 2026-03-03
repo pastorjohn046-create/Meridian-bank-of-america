@@ -6,6 +6,8 @@ import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
 import { toast } from 'sonner';
 
+import { api } from '../services/api';
+
 interface WalletProps {
   user: any;
 }
@@ -15,17 +17,43 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
   const [depositAccounts, setDepositAccounts] = React.useState<any[]>([]);
   const [cryptoWallets, setCryptoWallets] = React.useState<any[]>([]);
   const [copiedAddress, setCopiedAddress] = React.useState<string | null>(null);
-  const fiatAssets = MOCK_ASSETS.filter(a => a.type === 'fiat');
+  const fiatAssets = MOCK_ASSETS.filter(a => a.type === 'fiat').map(a => 
+    a.symbol === 'USD' ? { ...a, balance: user.balance, fiatValue: user.balance } : a
+  );
   const cryptoAssets = MOCK_ASSETS.filter(a => a.type === 'crypto');
 
   React.useEffect(() => {
-    Promise.all([
-      fetch('/api/deposit-accounts').then(res => res.json()),
-      fetch('/api/crypto-wallets').then(res => res.json())
-    ]).then(([deposits, wallets]) => {
-      setDepositAccounts(deposits);
-      setCryptoWallets(wallets);
-    }).catch(err => console.error(err));
+    const fetchInitialData = () => {
+      Promise.all([
+        api.getDepositAccounts(),
+        api.getCryptoWallets()
+      ]).then(([deposits, wallets]) => {
+        setDepositAccounts(deposits);
+        setCryptoWallets(wallets);
+      }).catch(err => console.error(err));
+    };
+
+    fetchInitialData();
+
+    // WebSocket for real-time updates
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'DEPOSIT_ACCOUNTS_UPDATED') {
+          setDepositAccounts(message.data);
+        } else if (message.type === 'CRYPTO_WALLETS_UPDATED') {
+          setCryptoWallets(message.data);
+        }
+      } catch (e) {
+        console.error('Failed to parse WS message', e);
+      }
+    };
+
+    return () => socket.close();
   }, []);
 
   const copyToClipboard = (text: string) => {

@@ -195,11 +195,29 @@ async function startServer() {
   app.post("/api/admin/deposit-accounts", (req, res) => {
     const newAccount = { id: Date.now().toString(), ...req.body };
     depositAccounts.push(newAccount);
+    
+    // Broadcast update
+    const payload = JSON.stringify({ type: "DEPOSIT_ACCOUNTS_UPDATED", data: depositAccounts });
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    });
+
     res.json({ status: "ok", account: newAccount });
   });
 
   app.delete("/api/admin/deposit-accounts/:id", (req, res) => {
     depositAccounts = depositAccounts.filter(a => a.id !== req.params.id);
+    
+    // Broadcast update
+    const payload = JSON.stringify({ type: "DEPOSIT_ACCOUNTS_UPDATED", data: depositAccounts });
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    });
+
     res.json({ status: "ok" });
   });
 
@@ -211,6 +229,15 @@ async function startServer() {
   app.post("/api/admin/crypto-wallets", (req, res) => {
     const newWallet = { id: Date.now().toString(), ...req.body };
     cryptoWallets.push(newWallet);
+    
+    // Broadcast update
+    const payload = JSON.stringify({ type: "CRYPTO_WALLETS_UPDATED", data: cryptoWallets });
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    });
+
     res.json({ status: "ok", wallet: newWallet });
   });
 
@@ -220,6 +247,15 @@ async function startServer() {
     const walletIndex = cryptoWallets.findIndex(w => w.id === id);
     if (walletIndex !== -1) {
       cryptoWallets[walletIndex].address = address;
+      
+      // Broadcast update
+      const payload = JSON.stringify({ type: "CRYPTO_WALLETS_UPDATED", data: cryptoWallets });
+      clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(payload);
+        }
+      });
+
       res.json({ status: "ok", wallet: cryptoWallets[walletIndex] });
     } else {
       res.status(404).json({ status: "error", message: "Wallet not found" });
@@ -228,6 +264,15 @@ async function startServer() {
 
   app.delete("/api/admin/crypto-wallets/:id", (req, res) => {
     cryptoWallets = cryptoWallets.filter(w => w.id !== req.params.id);
+    
+    // Broadcast update
+    const payload = JSON.stringify({ type: "CRYPTO_WALLETS_UPDATED", data: cryptoWallets });
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    });
+
     res.json({ status: "ok" });
   });
 

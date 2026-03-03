@@ -5,6 +5,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 
+import { api } from '../services/api';
+
 interface Message {
   id: string;
   userId: string;
@@ -35,8 +37,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ user, isOpen, onClose }) => {
   useEffect(() => {
     if (isOpen) {
       // Fetch history
-      fetch(`/api/messages/${user.id}`)
-        .then(res => res.json())
+      api.getMessages(user.id)
         .then(data => setMessages(data))
         .catch(err => console.error('Failed to fetch chat history', err));
 

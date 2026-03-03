@@ -5,6 +5,8 @@ import { MOCK_ASSETS } from '../mockData';
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
 
+import { api } from '../services/api';
+
 interface ExchangeProps {
   user: any;
 }
@@ -114,19 +116,35 @@ export const ExchangeScreen: React.FC<ExchangeProps> = ({ user }) => {
              return;
           }
           try {
-            await fetch('/api/notify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                title: 'Exchange Completed',
-                message: `Swapped ${fromAsset.symbol} for ${toAsset.symbol}`,
-                type: 'trade',
-                amount: amount || '0',
-                asset: fromAsset.symbol
-              })
+            // Create a transaction record locally if API fails
+            await api.createTransaction({
+              userId: user?.id || 'current',
+              type: 'trade',
+              amount: parseFloat(amount || '0'),
+              details: { from: fromAsset.symbol, to: toAsset.symbol }
             });
+
+            // Optional: Notify (can be ignored if API fails)
+            try {
+              await fetch('/api/notify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title: 'Exchange Completed',
+                  message: `Swapped ${fromAsset.symbol} for ${toAsset.symbol}`,
+                  type: 'trade',
+                  amount: amount || '0',
+                  asset: fromAsset.symbol
+                })
+              });
+            } catch (e) {
+              // Ignore notification failure on static hosts
+            }
+            
+            import('sonner').then(({ toast }) => toast.success('Exchange completed successfully'));
           } catch (e) {
             console.error(e);
+            import('sonner').then(({ toast }) => toast.error('Exchange failed'));
           }
         }}
         className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-base shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 active:scale-95 transition-all"

@@ -6,6 +6,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 
+import { api } from '../services/api';
+
 interface SendScreenProps {
   user: any;
   onUpdateUser: (user: any) => void;
@@ -37,35 +39,35 @@ export const SendScreen: React.FC<SendScreenProps> = ({ user, onUpdateUser }) =>
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: 'current',
-          type: 'send',
-          amount: parseFloat(amount),
-          details: { recipient }
-        })
+      const result = await api.createTransaction({
+        userId: user?.id || 'current',
+        type: 'send',
+        amount: parseFloat(amount),
+        details: { recipient }
       });
 
-      if (response.ok) {
-        const result = await response.json();
+      if (result.status === 'ok') {
         if (result.user) {
           onUpdateUser(result.user);
         }
       }
 
-      await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'Transfer Sent',
-          message: `You have successfully sent $${amount} to ${recipient}.`,
-          type: 'send',
-          amount: parseFloat(amount),
-          asset: 'USD'
-        })
-      });
+      // Optional: Notify (can be ignored if API fails)
+      try {
+        await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: 'Transfer Sent',
+            message: `You have successfully sent $${amount} to ${recipient}.`,
+            type: 'send',
+            amount: parseFloat(amount),
+            asset: 'USD'
+          })
+        });
+      } catch (e) {
+        // Ignore notification failure on static hosts
+      }
 
       setStep('success');
     } catch (error) {
