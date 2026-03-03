@@ -100,6 +100,17 @@ export const AdminPortal: React.FC = () => {
             if (prev.some(m => m.id === message.data.id)) return prev;
             return [...prev, message.data];
           });
+          toast.info(`New message from ${message.data.senderName}`);
+        } else if (message.type === 'USER_REGISTERED') {
+          setUsers(prev => {
+            if (prev.some(u => u.id === message.data.id)) return prev;
+            return [message.data, ...prev];
+          });
+          toast.success(`New user registered: ${message.data.name}`);
+        } else if (message.type === 'USER_LOGGED_IN') {
+          toast.info(`User logged in: ${message.data.name}`);
+          // Optionally update user status or last login time in the list
+          setUsers(prev => prev.map(u => u.id === message.data.id ? { ...u, lastLogin: message.data.lastLogin } : u));
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);

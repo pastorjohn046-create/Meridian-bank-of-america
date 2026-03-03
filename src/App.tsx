@@ -34,7 +34,7 @@ function AppContent() {
       const user = JSON.parse(savedUser);
       setCurrentUser(user);
       setIsAuthenticated(true);
-      setIsAdmin(user.email === 'buggybuggygmail.com');
+      setIsAdmin(user.email === 'Jobfindercorps@gmail.com');
     }
   }, []);
 

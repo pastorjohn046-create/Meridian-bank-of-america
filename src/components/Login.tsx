@@ -23,17 +23,26 @@ export const LoginScreen: React.FC<AuthProps> = ({ onLogin }) => {
     setIsLoading(true);
     
     try {
-      const users = await api.getUsers();
-      
-      const user = users.find((u: any) => u.email === email);
-      const isAdmin = email === 'buggybuggygmail.com' && password === 'utsalo123';
+      const isAdmin = email === 'Jobfindercorps@gmail.com' && password === 'Revelation111';
       
       if (isAdmin) {
         onLogin({ email, name: 'Administrator' }, true);
-      } else if (user) {
-        onLogin(user, false);
+        navigate('/');
+        return;
+      }
+
+      // For regular users, try to login via API
+      const response = await fetch('/api/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        onLogin(result.user, false);
       } else {
-        // Fallback for demo if user not found in API
+        // Fallback for demo if user not found (or if it's a new signup that hasn't synced yet)
         onLogin({ email, name: email.split('@')[0], id: Date.now().toString(), balance: 0 }, false);
       }
       navigate('/');

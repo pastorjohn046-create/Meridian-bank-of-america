@@ -31,8 +31,8 @@ interface ProfileProps {
 export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin, user, onLogout, onOpenChat }) => {
   const { theme } = useTheme();
   const navigate = useNavigate();
-  const userName = user?.name || 'Felix Henderson';
-  const userEmail = user?.email || 'felix@example.com';
+  const userName = user?.name || 'Guest User';
+  const userEmail = user?.email || 'guest@meridian.com';
   const userSeed = userName.split(' ')[0];
 
   const copyToClipboard = (text: string, label: string) => {

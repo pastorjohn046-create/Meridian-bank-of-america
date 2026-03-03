@@ -51,12 +51,7 @@ async function startServer() {
   });
 
   // In-memory user storage
-  const users: any[] = [
-    { id: '1', name: 'Felix Henderson', email: 'felix@example.com', phone: '+1 555 0101', pin: '123456', balance: 0, status: 'active', joinDate: '2024-01-15' },
-    { id: '2', name: 'Sarah Jenkins', email: 'sarah.j@example.com', phone: '+1 555 0102', pin: '654321', balance: 0, status: 'active', joinDate: '2024-02-01' },
-    { id: '3', name: 'Michael Chen', email: 'm.chen@example.com', phone: '+1 555 0103', pin: '111222', balance: 0, status: 'suspended', joinDate: '2024-02-10' },
-    { id: '4', name: 'Elena Rodriguez', email: 'elena.r@example.com', phone: '+1 555 0104', pin: '999888', balance: 0, status: 'active', joinDate: '2024-02-15' },
-  ];
+  let users: any[] = [];
 
   // In-memory deposit accounts
   let depositAccounts: any[] = [
@@ -79,14 +74,45 @@ async function startServer() {
   // API to register a new user
   app.post("/api/users/register", (req, res) => {
     const newUser = {
-      id: (users.length + 1).toString(),
+      id: Date.now().toString(),
       ...req.body,
       balance: 0,
       status: 'active',
       joinDate: new Date().toISOString().split('T')[0]
     };
     users.push(newUser);
+
+    // Broadcast registration to admin
+    const payload = JSON.stringify({ type: "USER_REGISTERED", data: newUser });
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    });
+
     res.json({ status: "ok", user: newUser });
+  });
+
+  // API to login a user (for tracking activity)
+  app.post("/api/users/login", (req, res) => {
+    const { email } = req.body;
+    const user = users.find(u => u.email === email);
+    
+    if (user) {
+      // Broadcast login to admin
+      const payload = JSON.stringify({ 
+        type: "USER_LOGGED_IN", 
+        data: { ...user, lastLogin: new Date().toISOString() } 
+      });
+      clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(payload);
+        }
+      });
+      res.json({ status: "ok", user });
+    } else {
+      res.status(404).json({ status: "error", message: "User not found" });
+    }
   });
 
   // API to get all users
