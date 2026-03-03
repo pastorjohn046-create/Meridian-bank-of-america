@@ -109,12 +109,12 @@ export const api = {
     }
   },
 
-  async updateBalance(id: string, balance: number) {
+  async updateBalance(id: string, balance: number, note?: string) {
     try {
       const response = await fetch('/api/users/update-balance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, balance })
+        body: JSON.stringify({ id, balance, note })
       });
       if (!response.ok) throw new Error('API failed');
       return await response.json();
@@ -282,11 +282,15 @@ export const api = {
       txs.push(newTx);
       localStorage.setItem(`txs_${txData.userId}`, JSON.stringify(txs));
       
-      // Also store in a global pending withdrawals list for admin
+      // Also store in a global pending list for admin
       if (txData.type === 'withdraw') {
         const allWithdrawals = JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
         allWithdrawals.push(newTx);
         localStorage.setItem('local_pending_withdrawals', JSON.stringify(allWithdrawals));
+      } else if (txData.type === 'deposit') {
+        const allDeposits = JSON.parse(localStorage.getItem('local_pending_deposits') || '[]');
+        allDeposits.push(newTx);
+        localStorage.setItem('local_pending_deposits', JSON.stringify(allDeposits));
       }
 
       return { status: 'ok', transaction: newTx };
@@ -300,6 +304,84 @@ export const api = {
       return await response.json();
     } catch (error) {
       return JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
+    }
+  },
+
+  async getPendingDeposits() {
+    try {
+      const response = await fetch('/api/admin/deposits');
+      if (!response.ok) throw new Error('API failed');
+      return await response.json();
+    } catch (error) {
+      return JSON.parse(localStorage.getItem('local_pending_deposits') || '[]');
+    }
+  },
+
+  async approveDeposit(id: string) {
+    try {
+      const response = await fetch('/api/admin/deposits/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      if (!response.ok) throw new Error('API failed');
+      return await response.json();
+    } catch (error) {
+      const allDeposits = JSON.parse(localStorage.getItem('local_pending_deposits') || '[]');
+      const txIndex = allDeposits.findIndex((t: any) => t.id === id);
+      
+      if (txIndex !== -1) {
+        const tx = allDeposits[txIndex];
+        const users = JSON.parse(localStorage.getItem('local_users') || '[]');
+        const userIndex = users.findIndex((u: any) => u.id === tx.userId);
+        
+        if (userIndex !== -1) {
+          users[userIndex].balance += tx.amount;
+          localStorage.setItem('local_users', JSON.stringify(users));
+          
+          const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
+          const userTxIndex = userTxs.findIndex((t: any) => t.id === id);
+          if (userTxIndex !== -1) {
+            userTxs[userTxIndex].status = 'completed';
+            localStorage.setItem(`txs_${tx.userId}`, JSON.stringify(userTxs));
+          }
+          
+          allDeposits.splice(txIndex, 1);
+          localStorage.setItem('local_pending_deposits', JSON.stringify(allDeposits));
+          
+          return { status: 'ok', user: users[userIndex] };
+        }
+      }
+      return { status: 'error', message: 'Deposit not found' };
+    }
+  },
+
+  async rejectDeposit(id: string) {
+    try {
+      const response = await fetch('/api/admin/deposits/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      if (!response.ok) throw new Error('API failed');
+      return await response.json();
+    } catch (error) {
+      const allDeposits = JSON.parse(localStorage.getItem('local_pending_deposits') || '[]');
+      const txIndex = allDeposits.findIndex((t: any) => t.id === id);
+      
+      if (txIndex !== -1) {
+        const tx = allDeposits[txIndex];
+        const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
+        const userTxIndex = userTxs.findIndex((t: any) => t.id === id);
+        if (userTxIndex !== -1) {
+          userTxs[userTxIndex].status = 'failed';
+          localStorage.setItem(`txs_${tx.userId}`, JSON.stringify(userTxs));
+        }
+        allDeposits.splice(txIndex, 1);
+        localStorage.setItem('local_pending_deposits', JSON.stringify(allDeposits));
+        return { status: 'ok' };
+      }
+      return { status: 'error', message: 'Deposit not found' };
     }
   },
 

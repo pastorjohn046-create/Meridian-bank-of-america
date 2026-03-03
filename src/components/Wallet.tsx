@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { MOCK_ASSETS } from '../mockData';
-import { TrendingUp, TrendingDown, ChevronRight, Building2, Bitcoin, Copy, Check } from 'lucide-react';
+import { TrendingUp, TrendingDown, ChevronRight, Building2, Bitcoin, Copy, Check, Plus, X } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
 import { toast } from 'sonner';
@@ -17,6 +18,11 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
   const [depositAccounts, setDepositAccounts] = React.useState<any[]>([]);
   const [cryptoWallets, setCryptoWallets] = React.useState<any[]>([]);
   const [copiedAddress, setCopiedAddress] = React.useState<string | null>(null);
+  const [isDepositModalOpen, setIsDepositModalOpen] = React.useState(false);
+  const [depositAmount, setDepositAmount] = React.useState('');
+  const [selectedMethod, setSelectedMethod] = React.useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
   const fiatAssets = MOCK_ASSETS.filter(a => a.type === 'fiat').map(a => 
     a.symbol === 'USD' ? { ...a, balance: user.balance, fiatValue: user.balance } : a
   );
@@ -47,6 +53,14 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
           setDepositAccounts(message.data);
         } else if (message.type === 'CRYPTO_WALLETS_UPDATED') {
           setCryptoWallets(message.data);
+        } else if (message.type === 'DEPOSIT_APPROVED' && message.data.userId === user?.id) {
+          toast.success('Deposit Approved', {
+            description: `Your deposit of $${message.data.amount.toLocaleString()} has been approved.`
+          });
+        } else if (message.type === 'DEPOSIT_REJECTED' && message.data.userId === user?.id) {
+          toast.error('Deposit Rejected', {
+            description: `Your deposit of $${message.data.amount.toLocaleString()} was rejected.`
+          });
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);
@@ -61,6 +75,39 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
     setCopiedAddress(text);
     toast.success('Address copied to clipboard');
     setTimeout(() => setCopiedAddress(null), 2000);
+  };
+
+  const handleConfirmDeposit = async () => {
+    if (!depositAmount || parseFloat(depositAmount) <= 0 || !selectedMethod) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await api.createTransaction({
+        userId: user.id,
+        type: 'deposit',
+        amount: parseFloat(depositAmount),
+        details: {
+          method: selectedMethod.bankName || selectedMethod.coin,
+          accountNumber: selectedMethod.accountNumber || selectedMethod.address
+        }
+      });
+
+      if (result.status === 'ok') {
+        toast.success('Deposit Request Sent', {
+          description: 'Your deposit is pending administrator approval.'
+        });
+        setIsDepositModalOpen(false);
+        setDepositAmount('');
+        setSelectedMethod(null);
+      }
+    } catch (error) {
+      toast.error('Failed to submit deposit request');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -87,8 +134,12 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
             {depositAccounts.map((acc) => (
               <div 
                 key={acc.id}
+                onClick={() => {
+                  setSelectedMethod(acc);
+                  setIsDepositModalOpen(true);
+                }}
                 className={cn(
-                  "p-4 rounded-2xl border flex items-center justify-between transition-all",
+                  "p-4 rounded-2xl border flex items-center justify-between transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]",
                   theme === 'dark' ? "bg-zinc-900/50 border-zinc-800" : "bg-white border-gray-100 shadow-sm"
                 )}
               >
@@ -104,7 +155,7 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Bank Transfer</p>
+                  <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Deposit Now</p>
                 </div>
               </div>
             ))}
@@ -113,9 +164,12 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
             {cryptoWallets.map((wallet) => (
               <div 
                 key={wallet.id}
-                onClick={() => copyToClipboard(wallet.address)}
+                onClick={() => {
+                  setSelectedMethod(wallet);
+                  setIsDepositModalOpen(true);
+                }}
                 className={cn(
-                  "p-4 rounded-2xl border flex items-center justify-between transition-all cursor-pointer group active:scale-[0.98]",
+                  "p-4 rounded-2xl border flex items-center justify-between transition-all cursor-pointer group hover:scale-[1.02] active:scale-[0.98]",
                   theme === 'dark' ? "bg-zinc-900/50 border-zinc-800 hover:bg-zinc-800" : "bg-white border-gray-100 shadow-sm hover:shadow-md"
                 )}
               >
@@ -136,15 +190,85 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
                     "p-2 rounded-lg transition-colors",
                     theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-50 text-gray-400"
                   )}>
-                    {copiedAddress === wallet.address ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                    <Plus size={14} className="text-emerald-500" />
                   </div>
-                  <p className="text-[8px] font-bold text-gray-500 uppercase tracking-tighter">Click to copy</p>
+                  <p className="text-[8px] font-bold text-gray-500 uppercase tracking-tighter">Deposit</p>
                 </div>
               </div>
             ))}
           </div>
         </section>
       )}
+
+      {/* Deposit Confirmation Modal */}
+      <AnimatePresence>
+        {isDepositModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              className={cn(
+                "w-full max-w-md rounded-[2.5rem] p-6 space-y-6 shadow-2xl",
+                theme === 'dark' ? "bg-zinc-900 border border-zinc-800" : "bg-white"
+              )}
+            >
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className={cn("text-lg font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Confirm Deposit</h3>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Submit your transaction details</p>
+                </div>
+                <button onClick={() => setIsDepositModalOpen(false)} className={cn("p-2 rounded-full", theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-100 text-gray-600")}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className={cn("p-4 rounded-2xl space-y-2", theme === 'dark' ? "bg-zinc-800" : "bg-gray-50")}>
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Selected Method</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                    {selectedMethod?.bankName ? <Building2 size={16} /> : <Bitcoin size={16} />}
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold">{selectedMethod?.bankName || selectedMethod?.coin}</p>
+                    <p className="text-[9px] text-gray-500 truncate max-w-[200px]">{selectedMethod?.accountNumber || selectedMethod?.address}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Amount Sent</p>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+                  <input 
+                    type="number" 
+                    placeholder="0.00"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    className={cn(
+                      "w-full pl-8 pr-4 py-4 rounded-2xl text-lg font-bold outline-none transition-all",
+                      theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-100 focus:border-indigo-500" : "bg-gray-100 border border-gray-200 text-gray-900 focus:border-indigo-500"
+                    )}
+                  />
+                </div>
+                <p className="text-[8px] text-gray-400 px-1">Please enter the exact amount you transferred to the details above.</p>
+              </div>
+
+              <button 
+                onClick={handleConfirmDeposit}
+                disabled={isSubmitting || !depositAmount}
+                className={cn(
+                  "w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50",
+                  "bg-indigo-600 text-white shadow-indigo-500/20"
+                )}
+              >
+                {isSubmitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check size={16} />}
+                Confirm Deposit
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Fiat Section */}
       <section className="space-y-2">

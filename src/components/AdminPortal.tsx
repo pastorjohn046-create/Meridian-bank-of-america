@@ -64,9 +64,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
   const [editAccountNumber, setEditAccountNumber] = useState('');
   const [editSortCode, setEditSortCode] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'deposits' | 'crypto' | 'support' | 'withdrawals'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'deposits' | 'crypto' | 'support' | 'withdrawals' | 'pending_deposits'>('users');
   const [allMessages, setAllMessages] = useState<any[]>([]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
+  const [pendingDeposits, setPendingDeposits] = useState<any[]>([]);
   const [selectedUserForChat, setSelectedUserForChat] = useState<string | null>(null);
   const [adminReply, setAdminReply] = useState('');
   const [socket, setSocket] = useState<WebSocket | null>(null);
@@ -81,18 +82,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
 
   const fetchData = async () => {
     try {
-      const [usersData, depositsData, cryptoData, messagesData, withdrawalsData] = await Promise.all([
+      const [usersData, depositsData, cryptoData, messagesData, withdrawalsData, pendingDepositsData] = await Promise.all([
         api.getUsers(),
         api.getDepositAccounts(),
         api.getCryptoWallets(),
         api.getMessages('admin'),
-        api.getPendingWithdrawals()
+        api.getPendingWithdrawals(),
+        api.getPendingDeposits()
       ]);
       setUsers(usersData);
       setDepositAccounts(depositsData);
       setCryptoWallets(cryptoData);
       setAllMessages(messagesData);
       setPendingWithdrawals(withdrawalsData);
+      setPendingDeposits(pendingDepositsData);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -146,6 +149,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
           toast.info(`New withdrawal request from ${message.data.userName}`);
         } else if (message.type === 'WITHDRAWAL_APPROVED' || message.type === 'WITHDRAWAL_REJECTED') {
           setPendingWithdrawals(prev => prev.filter(w => w.id !== message.data.id));
+        } else if (message.type === 'DEPOSIT_REQUESTED') {
+          setPendingDeposits(prev => [...prev, message.data]);
+          toast.info(`New deposit request from ${message.data.userName}`);
+        } else if (message.type === 'DEPOSIT_APPROVED' || message.type === 'DEPOSIT_REJECTED') {
+          setPendingDeposits(prev => prev.filter(d => d.id !== message.data.id));
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);
@@ -252,6 +260,35 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
     }
   };
 
+  const handleApproveDeposit = async (id: string) => {
+    try {
+      const result = await api.approveDeposit(id);
+      if (result.status === 'ok') {
+        setPendingDeposits(pendingDeposits.filter(d => d.id !== id));
+        if (result.user) {
+          setUsers(users.map(u => u.id === result.user.id ? result.user : u));
+        }
+        toast.success('Deposit approved successfully');
+      } else {
+        toast.error(result.message || 'Failed to approve deposit');
+      }
+    } catch (e) {
+      toast.error('Failed to approve deposit');
+    }
+  };
+
+  const handleRejectDeposit = async (id: string) => {
+    try {
+      const result = await api.rejectDeposit(id);
+      if (result.status === 'ok') {
+        setPendingDeposits(pendingDeposits.filter(d => d.id !== id));
+        toast.success('Deposit rejected');
+      }
+    } catch (e) {
+      toast.error('Failed to reject deposit');
+    }
+  };
+
   const handleSendAdminReply = () => {
     if (!selectedUserForChat || !adminReply.trim() || !socket) return;
 
@@ -313,11 +350,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
     const amount = parseFloat(adjustmentAmount);
     if (isNaN(amount)) return;
 
-    const newBalance = type === 'increase' ? editingUser.balance + amount : editingUser.balance - amount;
+    const currentBalance = Number(editingUser.balance);
+    const newBalance = type === 'increase' ? currentBalance + amount : currentBalance - amount;
     const finalBalance = Math.max(0, newBalance);
 
     try {
-      const result = await api.updateBalance(editingUser.id, finalBalance);
+      const result = await api.updateBalance(editingUser.id, finalBalance, `Manual ${type} by admin`);
       
       if (result.status === 'ok') {
         setUsers(users.map(u => u.id === editingUser.id ? result.user : u));
@@ -416,6 +454,22 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
           {pendingWithdrawals.length > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white dark:border-zinc-900">
               {pendingWithdrawals.length}
+            </span>
+          )}
+        </button>
+        <button 
+          onClick={() => setActiveTab('pending_deposits')}
+          className={cn(
+            "flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all relative",
+            activeTab === 'pending_deposits' 
+              ? (theme === 'dark' ? "bg-zinc-800 text-zinc-100 shadow-lg" : "bg-white text-gray-900 shadow-sm")
+              : "text-gray-500"
+          )}
+        >
+          Deposits
+          {pendingDeposits.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white dark:border-zinc-900">
+              {pendingDeposits.length}
             </span>
           )}
         </button>
@@ -636,6 +690,72 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
                       </button>
                       <button 
                         onClick={() => handleRejectWithdrawal(tx.id)}
+                        className={cn(
+                          "flex-1 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all",
+                          theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-100 text-gray-600"
+                        )}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'pending_deposits' ? (
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h3 className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Pending Deposit Requests ({pendingDeposits.length})</h3>
+            <div className="space-y-3">
+              {pendingDeposits.length === 0 ? (
+                <div className={cn(
+                  "p-10 rounded-2xl border-2 border-dashed text-center space-y-2",
+                  theme === 'dark' ? "border-zinc-800 bg-zinc-900/20" : "border-gray-100 bg-gray-50/50"
+                )}>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">No Pending Deposits</p>
+                  <p className="text-[8px] text-gray-400">All deposit requests have been processed.</p>
+                </div>
+              ) : (
+                pendingDeposits.map((tx) => (
+                  <div 
+                    key={tx.id}
+                    className={cn(
+                      "p-4 rounded-2xl border space-y-4",
+                      theme === 'dark' ? "bg-zinc-900/50 border-zinc-800" : "bg-white border-gray-100 shadow-sm"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                          <ArrowUpCircle size={20} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold">{tx.userName || 'Unknown User'}</p>
+                          <p className="text-[9px] text-gray-500 font-medium">{format(new Date(tx.timestamp), 'MMM dd, yyyy HH:mm')}</p>
+                          {tx.details?.method && (
+                            <p className="text-[9px] text-indigo-500 font-bold mt-1">
+                              Method: {tx.details.method}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-emerald-500">+${tx.amount.toLocaleString()}</p>
+                        <p className="text-[8px] text-gray-400 font-bold uppercase tracking-tighter">Pending Approval</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-2 border-t border-dashed border-gray-200 dark:border-zinc-800">
+                      <button 
+                        onClick={() => handleApproveDeposit(tx.id)}
+                        className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                      >
+                        Approve
+                      </button>
+                      <button 
+                        onClick={() => handleRejectDeposit(tx.id)}
                         className={cn(
                           "flex-1 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all",
                           theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-100 text-gray-600"

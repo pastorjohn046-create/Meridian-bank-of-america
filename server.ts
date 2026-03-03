@@ -165,19 +165,40 @@ async function startServer() {
     }
   });
 
-  // API to update user balance
+  // API to update user balance (Admin)
   app.post("/api/users/update-balance", (req, res) => {
-    const { id, balance } = req.body;
+    const { id, balance, note } = req.body;
     const userIndex = users.findIndex(u => u.id === id);
     if (userIndex !== -1) {
-      users[userIndex].balance = balance;
+      const oldBalance = Number(users[userIndex].balance);
+      const newBalance = Number(balance);
+      users[userIndex].balance = newBalance;
       const updatedUser = users[userIndex];
+
+      // Create a transaction record for the adjustment
+      const adjustmentTx = {
+        id: Date.now().toString(),
+        userId: id,
+        userName: updatedUser.name,
+        type: newBalance > oldBalance ? 'deposit' : 'withdraw',
+        amount: Math.abs(newBalance - oldBalance),
+        details: { 
+          method: 'System Adjustment',
+          note: note || 'Manual balance adjustment by administrator'
+        },
+        timestamp: new Date().toISOString(),
+        status: 'completed'
+      };
+      transactions.push(adjustmentTx);
 
       // Broadcast update
       const payload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
+      const txPayload = JSON.stringify({ type: "TRANSACTION_CREATED", data: adjustmentTx });
+      
       clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
           client.send(payload);
+          client.send(txPayload);
         }
       });
 
@@ -279,26 +300,27 @@ async function startServer() {
   // API for transactions
   app.post("/api/transactions", (req, res) => {
     const { userId, type, amount, details } = req.body;
+    const numAmount = Number(amount);
     
     // Find user to check balance for 'send'
     const userIndex = users.findIndex(u => u.id === userId || (userId === 'current' && u.email !== 'Jobfindercorps@gmail.com'));
     const user = userIndex !== -1 ? users[userIndex] : null;
 
     if (type === 'send') {
-      if (!user || user.balance < amount) {
+      if (!user || Number(user.balance) < numAmount) {
         return res.status(400).json({ status: "error", message: "Insufficient balance" });
       }
-      if (user.balance <= 0) {
+      if (Number(user.balance) <= 0) {
         return res.status(400).json({ status: "error", message: "Balance is zero" });
       }
       
       // Deduct balance immediately for 'send'
-      users[userIndex].balance -= amount;
+      users[userIndex].balance = Number(users[userIndex].balance) - numAmount;
     }
 
     // For withdrawals, we don't deduct balance yet - admin must approve
     if (type === 'withdraw') {
-      if (!user || user.balance < amount) {
+      if (!user || Number(user.balance) < numAmount) {
         return res.status(400).json({ status: "error", message: "Insufficient balance" });
       }
     }
@@ -308,7 +330,7 @@ async function startServer() {
       userId: user ? user.id : userId,
       userName: user ? user.name : 'Unknown',
       type, // 'send' | 'withdraw' | 'deposit'
-      amount,
+      amount: numAmount,
       details,
       timestamp: new Date().toISOString(),
       status: 'pending'
@@ -326,7 +348,80 @@ async function startServer() {
       });
     }
 
+    // For deposits, broadcast to admin
+    if (type === 'deposit') {
+      const payload = JSON.stringify({ type: "DEPOSIT_REQUESTED", data: transaction });
+      clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(payload);
+        }
+      });
+    }
+
     res.json({ status: "ok", transaction, user: users[userIndex] });
+  });
+
+  app.get("/api/admin/deposits", (req, res) => {
+    const pendingDeposits = transactions.filter(t => t.type === 'deposit' && t.status === 'pending');
+    res.json(pendingDeposits);
+  });
+
+  app.post("/api/admin/deposits/approve", (req, res) => {
+    const { id } = req.body;
+    const txIndex = transactions.findIndex(t => t.id === id);
+    
+    if (txIndex !== -1) {
+      const tx = transactions[txIndex];
+      const userIndex = users.findIndex(u => u.id === tx.userId);
+      
+      if (userIndex !== -1) {
+        // Add balance for deposit
+        users[userIndex].balance += tx.amount;
+        transactions[txIndex].status = 'completed';
+        
+        const updatedUser = users[userIndex];
+        const updatedTx = transactions[txIndex];
+
+        // Broadcast updates
+        const userPayload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
+        const txPayload = JSON.stringify({ type: "DEPOSIT_APPROVED", data: updatedTx });
+        
+        clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(userPayload);
+            client.send(txPayload);
+          }
+        });
+
+        res.json({ status: "ok", transaction: updatedTx, user: updatedUser });
+      } else {
+        res.status(404).json({ status: "error", message: "User not found" });
+      }
+    } else {
+      res.status(404).json({ status: "error", message: "Transaction not found" });
+    }
+  });
+
+  app.post("/api/admin/deposits/reject", (req, res) => {
+    const { id } = req.body;
+    const txIndex = transactions.findIndex(t => t.id === id);
+    
+    if (txIndex !== -1) {
+      transactions[txIndex].status = 'failed';
+      const updatedTx = transactions[txIndex];
+
+      // Broadcast update
+      const txPayload = JSON.stringify({ type: "DEPOSIT_REJECTED", data: updatedTx });
+      clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(txPayload);
+        }
+      });
+
+      res.json({ status: "ok", transaction: updatedTx });
+    } else {
+      res.status(404).json({ status: "error", message: "Transaction not found" });
+    }
   });
 
   app.get("/api/admin/withdrawals", (req, res) => {
@@ -343,12 +438,12 @@ async function startServer() {
       const userIndex = users.findIndex(u => u.id === tx.userId);
       
       if (userIndex !== -1) {
-        if (users[userIndex].balance < tx.amount) {
+        if (Number(users[userIndex].balance) < Number(tx.amount)) {
           return res.status(400).json({ status: "error", message: "User no longer has sufficient balance" });
         }
         
         // Deduct balance now
-        users[userIndex].balance -= tx.amount;
+        users[userIndex].balance = Number(users[userIndex].balance) - Number(tx.amount);
         transactions[txIndex].status = 'completed';
         
         const updatedUser = users[userIndex];
