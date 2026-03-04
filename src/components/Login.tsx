@@ -51,12 +51,17 @@ export const LoginScreen: React.FC<AuthProps> = ({ onLogin }) => {
     >
       <div className="flex-1 space-y-6">
         <header className="space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-premium-gradient flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-            <Compass size={28} strokeWidth={2.5} className="text-gold" />
+          <div className="w-16 h-16 flex items-center justify-center">
+            <img 
+              src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/HSBC_logo_%282018%29.svg/1280px-HSBC_logo_%282018%29.svg.png" 
+              alt="HSBC Logo" 
+              className="w-full h-auto"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div className="space-y-0.5">
-            <h1 className={cn("text-xl font-bold tracking-tight transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Welcome back</h1>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Sign in to Meridian Wealth</p>
+            <h1 className={cn("text-xl font-black tracking-tighter transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>HSBC BANK</h1>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Sign in to your private account</p>
           </div>
         </header>
 

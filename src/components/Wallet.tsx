@@ -11,9 +11,10 @@ import { api } from '../services/api';
 
 interface WalletProps {
   user: any;
+  onUpdateUser?: (user: any) => void;
 }
 
-export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
+export const WalletScreen: React.FC<WalletProps> = ({ user, onUpdateUser }) => {
   const { theme } = useTheme();
   const [depositAccounts, setDepositAccounts] = React.useState<any[]>([]);
   const [cryptoWallets, setCryptoWallets] = React.useState<any[]>([]);
@@ -29,14 +30,23 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
   const cryptoAssets = MOCK_ASSETS.filter(a => a.type === 'crypto');
 
   React.useEffect(() => {
-    const fetchInitialData = () => {
-      Promise.all([
-        api.getDepositAccounts(),
-        api.getCryptoWallets()
-      ]).then(([deposits, wallets]) => {
+    const fetchInitialData = async () => {
+      try {
+        // Sync user data on mount
+        const updatedUser = await api.syncCurrentUser(user.id);
+        if (updatedUser && onUpdateUser) {
+          onUpdateUser(updatedUser);
+        }
+
+        const [deposits, wallets] = await Promise.all([
+          api.getDepositAccounts(),
+          api.getCryptoWallets()
+        ]);
         setDepositAccounts(deposits);
         setCryptoWallets(wallets);
-      }).catch(err => console.error(err));
+      } catch (err) {
+        console.error(err);
+      }
     };
 
     fetchInitialData();

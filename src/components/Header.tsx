@@ -17,12 +17,17 @@ export const Header: React.FC<HeaderProps> = ({ onOpenChat }) => {
       theme === 'dark' ? "bg-zinc-950/80 border-b border-zinc-800" : "bg-white/80 border-b border-gray-50"
     )}>
       <div className="flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl bg-premium-gradient flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-          <Compass size={20} strokeWidth={2.5} className="text-gold" />
+        <div className="w-10 h-10 flex items-center justify-center">
+          <img 
+            src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/HSBC_logo_%282018%29.svg/1280px-HSBC_logo_%282018%29.svg.png" 
+            alt="HSBC Logo" 
+            className="w-full h-auto"
+            referrerPolicy="no-referrer"
+          />
         </div>
         <div>
-          <h1 className={cn("text-xs font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Meridian Wealth</h1>
-          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Institutional Banking</p>
+          <h1 className={cn("text-sm font-black tracking-tighter transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>HSBC BANK</h1>
+          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.2em]">Private Banking</p>
         </div>
       </div>
       <div className="flex items-center gap-2">

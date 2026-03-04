@@ -11,12 +11,12 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('meridian-theme');
+    const saved = localStorage.getItem('hsbc-theme');
     return (saved as Theme) || 'light';
   });
 
   useEffect(() => {
-    localStorage.setItem('meridian-theme', theme);
+    localStorage.setItem('hsbc-theme', theme);
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {

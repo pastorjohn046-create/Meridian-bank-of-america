@@ -23,9 +23,10 @@ import { api } from '../services/api';
 
 interface DashboardProps {
   user: any;
+  onUpdateUser?: (user: any) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateUser }) => {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -36,7 +37,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       if (!user) return;
       try {
         // Also sync user data when dashboard mounts to ensure latest balance
-        api.syncCurrentUser(user.id);
+        const updatedUser = await api.syncCurrentUser(user.id);
+        if (updatedUser && onUpdateUser) {
+          onUpdateUser(updatedUser);
+        }
         
         const data = await api.getTransactions(user.id);
         setTransactions(data);

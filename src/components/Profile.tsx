@@ -34,7 +34,7 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin, user, onLogout,
   const { theme } = useTheme();
   const navigate = useNavigate();
   const userName = user?.name || 'Guest User';
-  const userEmail = user?.email || 'guest@meridian.com';
+  const userEmail = user?.email || 'guest@hsbc.com';
   const userSeed = userName.split(' ')[0];
 
   const accountNumber = user?.accountNumber || '8822 4411 0099';
@@ -246,7 +246,7 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin, user, onLogout,
       </button>
 
       <p className="text-center text-[8px] text-gray-500 font-bold uppercase tracking-widest pt-2">
-        Meridian Wealth v2.4.0 • Secure Session
+        HSBC BANK v3.0.0 • Secure Session
       </p>
     </motion.div>
   );

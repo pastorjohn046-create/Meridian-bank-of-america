@@ -36,7 +36,7 @@ function AppContent() {
   }, [currentUser]);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('meridian_user');
+    const savedUser = localStorage.getItem('hsbc_user');
     if (savedUser) {
       const user = JSON.parse(savedUser);
       setCurrentUser(user);
@@ -47,7 +47,8 @@ function AppContent() {
       // This ensures that if the balance was updated while the user was away, it reflects now
       api.syncCurrentUser(user.id).then(updated => {
         if (updated) {
-          setCurrentUser(updated);
+          console.log('Mount Sync: Updating user data', updated.balance);
+          updateUser(updated);
         }
       });
     }
@@ -70,9 +71,8 @@ function AppContent() {
             updated.accountNumber !== currentUserRef.current?.accountNumber;
 
           if (hasChanged) {
-            console.log('Sync: User data updated from server');
-            setCurrentUser(updated);
-            localStorage.setItem('meridian_user', JSON.stringify(updated));
+            console.log('Sync: User data updated from server', updated.balance);
+            updateUser(updated);
           }
         }
       });
@@ -85,20 +85,29 @@ function AppContent() {
     setCurrentUser(user);
     setIsAuthenticated(true);
     setIsAdmin(!!admin || user.email === 'Jobfindercorps@gmail.com');
-    localStorage.setItem('meridian_user', JSON.stringify(user));
+    localStorage.setItem('hsbc_user', JSON.stringify(user));
   };
 
   const updateUser = (user: any) => {
     if (!user) return;
-    setCurrentUser(user);
-    localStorage.setItem('meridian_user', JSON.stringify(user));
+    const userWithNumberBalance = {
+      ...user,
+      balance: Number(user.balance)
+    };
+    setCurrentUser(userWithNumberBalance);
+    localStorage.setItem('hsbc_user', JSON.stringify(userWithNumberBalance));
   };
+
+  const updateUserRef = useRef(updateUser);
+  useEffect(() => {
+    updateUserRef.current = updateUser;
+  }, [updateUser]);
 
   const handleLogout = () => {
     setCurrentUser(null);
     setIsAuthenticated(false);
     setIsAdmin(false);
-    localStorage.removeItem('meridian_user');
+    localStorage.removeItem('hsbc_user');
   };
 
   useEffect(() => {
@@ -147,11 +156,11 @@ function AppContent() {
           } else if (message.type === 'USER_UPDATED') {
             const updatedUser = message.data;
             // Get current user from localStorage if ref is null (e.g. during login transition)
-            const activeUser = currentUserRef.current || JSON.parse(localStorage.getItem('meridian_user') || 'null');
+            const activeUser = currentUserRef.current || JSON.parse(localStorage.getItem('hsbc_user') || 'null');
             
             if (activeUser && updatedUser.id === activeUser.id) {
-              console.log('WS: Current user updated');
-              updateUser(updatedUser);
+              console.log('WS: Current user updated', updatedUser.balance);
+              updateUserRef.current(updatedUser);
               toast.info('Account Updated', {
                 description: 'Your account details or balance have been updated by the system.',
               });
@@ -174,7 +183,7 @@ function AppContent() {
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'meridian_user') {
+      if (e.key === 'hsbc_user') {
         if (e.newValue) {
           setCurrentUser(JSON.parse(e.newValue));
         } else {
@@ -218,8 +227,8 @@ function AppContent() {
               <Route path="/signup" element={!isAuthenticated ? <SignupScreen onLogin={handleLogin} /> : <Navigate to="/" />} />
 
               {/* Protected Routes */}
-              <Route path="/" element={isAuthenticated ? <Dashboard user={currentUser} /> : <Navigate to="/login" />} />
-              <Route path="/wallet" element={isAuthenticated ? <WalletScreen user={currentUser} /> : <Navigate to="/login" />} />
+              <Route path="/" element={isAuthenticated ? <Dashboard user={currentUser} onUpdateUser={updateUser} /> : <Navigate to="/login" />} />
+              <Route path="/wallet" element={isAuthenticated ? <WalletScreen user={currentUser} onUpdateUser={updateUser} /> : <Navigate to="/login" />} />
               <Route path="/exchange" element={isAuthenticated ? <ExchangeScreen user={currentUser} /> : <Navigate to="/login" />} />
               <Route path="/market" element={isAuthenticated ? <MarketScreen user={currentUser} /> : <Navigate to="/login" />} />
               <Route path="/profile" element={isAuthenticated ? <ProfileScreen isAdmin={isAdmin} user={currentUser} onLogout={handleLogout} onOpenChat={() => setIsChatOpen(true)} /> : <Navigate to="/login" />} />

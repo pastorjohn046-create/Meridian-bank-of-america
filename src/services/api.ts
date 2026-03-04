@@ -4,7 +4,7 @@ export const api = {
   // --- Users ---
   async getUsers() {
     try {
-      const response = await fetch('/api/users');
+      const response = await fetch(`/api/users?t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
@@ -83,10 +83,10 @@ export const api = {
 
   async syncCurrentUser(userId: string) {
     try {
-      const response = await fetch(`/api/users/${userId}`);
+      const response = await fetch(`/api/users/${userId}?t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error('API failed');
       const user = await response.json();
-      localStorage.setItem('meridian_user', JSON.stringify(user));
+      localStorage.setItem('hsbc_user', JSON.stringify(user));
       return user;
     } catch (error) {
       console.error('Sync current user failed:', error);
@@ -97,7 +97,7 @@ export const api = {
   // --- Deposit Accounts ---
   async getDepositAccounts() {
     try {
-      const response = await fetch('/api/deposit-accounts');
+      const response = await fetch(`/api/deposit-accounts?t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
@@ -135,7 +135,7 @@ export const api = {
   // --- Crypto Wallets ---
   async getCryptoWallets() {
     try {
-      const response = await fetch('/api/crypto-wallets');
+      const response = await fetch(`/api/crypto-wallets?t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
@@ -188,7 +188,7 @@ export const api = {
   // --- Transactions ---
   async getTransactions(userId: string): Promise<Transaction[]> {
     try {
-      const response = await fetch(`/api/transactions/${userId}`);
+      const response = await fetch(`/api/transactions/${userId}?t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
@@ -214,7 +214,7 @@ export const api = {
 
   async getPendingWithdrawals() {
     try {
-      const response = await fetch('/api/admin/withdrawals');
+      const response = await fetch(`/api/admin/withdrawals?t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
@@ -225,7 +225,7 @@ export const api = {
 
   async getPendingDeposits() {
     try {
-      const response = await fetch('/api/admin/deposits');
+      const response = await fetch(`/api/admin/deposits?t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {

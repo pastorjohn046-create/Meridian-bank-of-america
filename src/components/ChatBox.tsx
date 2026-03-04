@@ -121,7 +121,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ user, isOpen, onClose }) => {
                 <Headset size={16} />
               </div>
               <div>
-                <p className="text-xs font-bold">Meridian Support</p>
+                <p className="text-xs font-bold">HSBC Support</p>
                 <div className="flex items-center gap-1">
                   <div className={cn("w-1 h-1 rounded-full animate-pulse", isConnected ? "bg-emerald-400" : "bg-red-400")} />
                   <p className="text-[9px] opacity-80">{isConnected ? 'Always active for you' : 'Connecting...'}</p>
