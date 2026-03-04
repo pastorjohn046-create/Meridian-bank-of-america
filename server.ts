@@ -76,7 +76,7 @@ if (accountsCount.count === 0) {
   db.prepare(`
     INSERT INTO deposit_accounts (id, bankName, accountName, accountNumber, type)
     VALUES (?, ?, ?, ?, ?)
-  `).run("1", "HSBC Central Bank", "HSBC Private Banking", "8829304112", "Checking");
+  `).run("1", "Meridian Central Bank", "Meridian Wealth Corp", "8829304112", "Checking");
 }
 
 // Seed initial crypto wallets if empty

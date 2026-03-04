@@ -21,7 +21,7 @@ export const TransactionDetails: React.FC = () => {
       if (!id) return;
       try {
         // Try to get current user to find their transactions
-        const userStr = localStorage.getItem('hsbc_user');
+        const userStr = localStorage.getItem('meridian_user');
         if (userStr) {
           const user = JSON.parse(userStr);
           const transactions = await api.getTransactions(user.id);

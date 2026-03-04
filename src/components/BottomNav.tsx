@@ -30,7 +30,7 @@ export const BottomNav: React.FC = () => {
               <div className={cn(
                 "flex flex-col items-center gap-0.5 transition-all duration-200",
                 isActive 
-                  ? (theme === 'dark' ? "text-hsbc-red scale-105" : "text-hsbc-red scale-105") 
+                  ? (theme === 'dark' ? "text-indigo-400 scale-105" : "text-indigo-600 scale-105") 
                   : (theme === 'dark' ? "text-zinc-500 hover:text-zinc-300" : "text-gray-400 hover:text-gray-600")
               )}>
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />

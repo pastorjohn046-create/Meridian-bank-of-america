@@ -36,7 +36,7 @@ function AppContent() {
   }, [currentUser]);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('hsbc_user');
+    const savedUser = localStorage.getItem('meridian_user');
     if (savedUser) {
       const user = JSON.parse(savedUser);
       setCurrentUser(user);
@@ -85,7 +85,7 @@ function AppContent() {
     setCurrentUser(user);
     setIsAuthenticated(true);
     setIsAdmin(!!admin || user.email === 'Jobfindercorps@gmail.com');
-    localStorage.setItem('hsbc_user', JSON.stringify(user));
+    localStorage.setItem('meridian_user', JSON.stringify(user));
   };
 
   const updateUser = (user: any) => {
@@ -95,7 +95,7 @@ function AppContent() {
       balance: Number(user.balance)
     };
     setCurrentUser(userWithNumberBalance);
-    localStorage.setItem('hsbc_user', JSON.stringify(userWithNumberBalance));
+    localStorage.setItem('meridian_user', JSON.stringify(userWithNumberBalance));
   };
 
   const updateUserRef = useRef(updateUser);
@@ -107,7 +107,7 @@ function AppContent() {
     setCurrentUser(null);
     setIsAuthenticated(false);
     setIsAdmin(false);
-    localStorage.removeItem('hsbc_user');
+    localStorage.removeItem('meridian_user');
   };
 
   useEffect(() => {
@@ -156,7 +156,7 @@ function AppContent() {
           } else if (message.type === 'USER_UPDATED') {
             const updatedUser = message.data;
             // Get current user from localStorage if ref is null (e.g. during login transition)
-            const activeUser = currentUserRef.current || JSON.parse(localStorage.getItem('hsbc_user') || 'null');
+            const activeUser = currentUserRef.current || JSON.parse(localStorage.getItem('meridian_user') || 'null');
             
             if (activeUser && updatedUser.id === activeUser.id) {
               console.log('WS: Current user updated', updatedUser.balance);
@@ -183,7 +183,7 @@ function AppContent() {
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'hsbc_user') {
+      if (e.key === 'meridian_user') {
         if (e.newValue) {
           setCurrentUser(JSON.parse(e.newValue));
         } else {

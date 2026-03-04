@@ -214,7 +214,7 @@ export const SignupScreen: React.FC<AuthProps> = ({ onLogin }) => {
             </div>
             <div className="space-y-2">
               <h2 className={cn("text-2xl font-bold tracking-tight", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Account Ready</h2>
-              <p className="text-xs text-gray-500 leading-relaxed max-w-[200px] mx-auto">Welcome to HSBC BANK. Your private banking journey begins now.</p>
+              <p className="text-xs text-gray-500 leading-relaxed max-w-[200px] mx-auto">Welcome to Meridian Wealth. Your private banking journey begins now.</p>
             </div>
           </motion.div>
         );

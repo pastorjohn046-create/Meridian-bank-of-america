@@ -6,7 +6,6 @@
   --color-bank-midnight: #0A0F1E;
   --color-bank-emerald: #064E3B;
   --color-bank-accent: #6366F1;
-  --color-hsbc-red: #db0011;
 }
 
 @layer utilities {
@@ -18,22 +17,16 @@
     scrollbar-width: none;
   }
   .bg-premium-gradient {
-    background: linear-gradient(135deg, #db0011 0%, #a5000d 100%);
-  }
-  .bg-hsbc-gradient {
-    background: linear-gradient(135deg, #db0011 0%, #ff1a2b 100%);
+    background: linear-gradient(135deg, #0A0F1E 0%, #1E293B 100%);
   }
   .bg-gold-gradient {
-    background: linear-gradient(135deg, #db0011 0%, #8b0000 100%);
+    background: linear-gradient(135deg, #D4AF37 0%, #F59E0B 100%);
   }
   .bg-emerald-gradient {
-    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    background: linear-gradient(135deg, #064E3B 0%, #10B981 100%);
   }
   .text-gold {
-    color: #db0011;
-  }
-  .text-hsbc {
-    color: #db0011;
+    color: #D4AF37;
   }
 }
 

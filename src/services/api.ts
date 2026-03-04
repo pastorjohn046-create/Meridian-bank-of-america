@@ -86,7 +86,7 @@ export const api = {
       const response = await fetch(`/api/users/${userId}?t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error('API failed');
       const user = await response.json();
-      localStorage.setItem('hsbc_user', JSON.stringify(user));
+      localStorage.setItem('meridian_user', JSON.stringify(user));
       return user;
     } catch (error) {
       console.error('Sync current user failed:', error);
