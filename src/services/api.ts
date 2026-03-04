@@ -17,7 +17,7 @@ export const api = {
           id: 'admin-1',
           name: 'System Admin',
           email: 'Jobfindercorps@gmail.com',
-          pin: '1234',
+          pin: '1111',
           balance: 1000000,
           accountNumber: '8822 4411 9900',
           sortCode: '20-44-99',
@@ -339,6 +339,16 @@ export const api = {
           users[userIndex].balance += tx.amount;
           localStorage.setItem('local_users', JSON.stringify(users));
           
+          // Sync with current session if it's the same user
+          const currentSession = localStorage.getItem('meridian_user');
+          if (currentSession) {
+            const loggedInUser = JSON.parse(currentSession);
+            if (loggedInUser.id === tx.userId) {
+              loggedInUser.balance = users[userIndex].balance;
+              localStorage.setItem('meridian_user', JSON.stringify(loggedInUser));
+            }
+          }
+          
           const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
           const userTxIndex = userTxs.findIndex((t: any) => t.id === id);
           if (userTxIndex !== -1) {
@@ -411,6 +421,16 @@ export const api = {
           // Deduct balance
           users[userIndex].balance -= tx.amount;
           localStorage.setItem('local_users', JSON.stringify(users));
+          
+          // Sync with current session if it's the same user
+          const currentSession = localStorage.getItem('meridian_user');
+          if (currentSession) {
+            const loggedInUser = JSON.parse(currentSession);
+            if (loggedInUser.id === tx.userId) {
+              loggedInUser.balance = users[userIndex].balance;
+              localStorage.setItem('meridian_user', JSON.stringify(loggedInUser));
+            }
+          }
           
           // Update transaction status in user's list
           const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
@@ -501,7 +521,52 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      return JSON.parse(localStorage.getItem(`messages_${userId}`) || '[]');
+      const allMessages = JSON.parse(localStorage.getItem('local_messages') || '[]');
+      if (userId === 'admin') return allMessages;
+      return allMessages.filter((m: any) => m.userId === userId || m.receiverId === userId);
     }
+  },
+
+  async sendMessage(messageData: any) {
+    try {
+      // We still try to use the WebSocket if possible, but this is for history persistence
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(messageData)
+      });
+      if (!response.ok) throw new Error('API failed');
+      return await response.json();
+    } catch (error) {
+      const allMessages = JSON.parse(localStorage.getItem('local_messages') || '[]');
+      const newMessage = {
+        ...messageData,
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString()
+      };
+      allMessages.push(newMessage);
+      localStorage.setItem('local_messages', JSON.stringify(allMessages));
+      return { status: 'ok', message: newMessage };
+    }
+  },
+
+  resetLocalData() {
+    const keys = [
+      'local_users', 
+      'local_deposit_accounts', 
+      'local_crypto_wallets', 
+      'local_pending_withdrawals', 
+      'local_pending_deposits',
+      'local_messages'
+    ];
+    // Also clear user-specific transaction lists
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('txs_') || key.startsWith('withdrawal_methods_') || key.startsWith('messages_'))) {
+        keys.push(key);
+      }
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+    window.location.reload();
   }
 };

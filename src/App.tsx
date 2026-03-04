@@ -142,9 +142,12 @@ function AppContent() {
         {showHeader && <Header onOpenChat={() => setIsChatOpen(true)} />}
         
         {!isOnline && (
-          <div className="bg-amber-500/10 border-y border-amber-500/20 py-1 px-4 flex items-center justify-between">
-            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Static Mode Active</p>
-            <p className="text-[8px] text-amber-500/80">Data saved locally in browser</p>
+          <div className="bg-amber-500/10 border-y border-amber-500/20 py-1.5 px-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Static Mode Active</p>
+            </div>
+            <p className="text-[8px] text-amber-600/80 font-medium">Data is saved locally in your browser</p>
           </div>
         )}
         <main className={cn(

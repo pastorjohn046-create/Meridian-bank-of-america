@@ -3,6 +3,86 @@ import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import Database from "better-sqlite3";
+
+const db = new Database("database.db");
+
+// Initialize database schema
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    email TEXT UNIQUE,
+    pin TEXT,
+    balance REAL DEFAULT 0,
+    accountNumber TEXT,
+    sortCode TEXT,
+    status TEXT DEFAULT 'active',
+    joinDate TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS deposit_accounts (
+    id TEXT PRIMARY KEY,
+    bankName TEXT,
+    accountName TEXT,
+    accountNumber TEXT,
+    type TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS crypto_wallets (
+    id TEXT PRIMARY KEY,
+    coin TEXT,
+    symbol TEXT,
+    address TEXT,
+    network TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS transactions (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    userName TEXT,
+    type TEXT,
+    amount REAL,
+    details TEXT,
+    timestamp TEXT,
+    status TEXT DEFAULT 'pending'
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    receiverId TEXT,
+    text TEXT,
+    sender TEXT,
+    timestamp TEXT
+  );
+`);
+
+// Seed initial admin if not exists
+const adminExists = db.prepare("SELECT * FROM users WHERE email = ?").get("Jobfindercorps@gmail.com");
+if (!adminExists) {
+  db.prepare(`
+    INSERT INTO users (id, name, email, pin, balance, accountNumber, sortCode, status, joinDate)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run("admin-1", "Administrator", "Jobfindercorps@gmail.com", "1111", 1250000, "8822 4411 0099", "20-44-99", "active", "2023-01-01");
+}
+
+// Seed initial deposit account if empty
+const accountsCount = db.prepare("SELECT COUNT(*) as count FROM deposit_accounts").get() as { count: number };
+if (accountsCount.count === 0) {
+  db.prepare(`
+    INSERT INTO deposit_accounts (id, bankName, accountName, accountNumber, type)
+    VALUES (?, ?, ?, ?, ?)
+  `).run("1", "Meridian Central Bank", "Meridian Wealth Corp", "8829304112", "Checking");
+}
+
+// Seed initial crypto wallets if empty
+const walletsCount = db.prepare("SELECT COUNT(*) as count FROM crypto_wallets").get() as { count: number };
+if (walletsCount.count === 0) {
+  db.prepare(`INSERT INTO crypto_wallets (id, coin, symbol, address, network) VALUES (?, ?, ?, ?, ?)`).run("1", "Bitcoin", "BTC", "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh", "BTC");
+  db.prepare(`INSERT INTO crypto_wallets (id, coin, symbol, address, network) VALUES (?, ?, ?, ?, ?)`).run("2", "Ethereum", "ETH", "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", "ERC20");
+  db.prepare(`INSERT INTO crypto_wallets (id, coin, symbol, address, network) VALUES (?, ?, ?, ?, ?)`).run("3", "Tether", "USDT", "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", "ERC20");
+}
 
 async function startServer() {
   const app = express();
@@ -12,13 +92,11 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Store connected clients
   const clients = new Set<WebSocket>();
 
   wss.on("connection", (ws) => {
     clients.add(ws);
-    console.log("Client connected to notifications");
-
+    
     ws.on("message", (data) => {
       try {
         const message = JSON.parse(data.toString());
@@ -28,10 +106,13 @@ async function startServer() {
             ...message.data,
             timestamp: new Date().toISOString()
           };
-          messages.push(chatMsg);
           
-          // Broadcast to all clients (simple implementation for demo)
-          // In a real app, you'd target specific users
+          db.prepare(`
+            INSERT INTO messages (id, userId, receiverId, text, sender, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(chatMsg.id, chatMsg.userId, chatMsg.receiverId, chatMsg.text, chatMsg.sender, chatMsg.timestamp);
+          
+          // Broadcast to all clients
           const payload = JSON.stringify({ type: "CHAT_MESSAGE", data: chatMsg });
           clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
@@ -44,90 +125,46 @@ async function startServer() {
       }
     });
 
-    ws.on("close", () => {
-      clients.delete(ws);
-      console.log("Client disconnected");
-    });
+    ws.on("close", () => clients.delete(ws));
   });
-
-  // In-memory user storage
-  let users: any[] = [
-    {
-      id: "admin-1",
-      name: "Administrator",
-      email: "Jobfindercorps@gmail.com",
-      balance: 1250000,
-      accountNumber: "8822 4411 0099",
-      sortCode: "20-44-99",
-      status: "active",
-      joinDate: "2023-01-01",
-      pin: "1111"
-    }
-  ];
-
-  // In-memory deposit accounts
-  let depositAccounts: any[] = [
-    { id: '1', bankName: 'Meridian Central Bank', accountName: 'Meridian Wealth Corp', accountNumber: '8829304112', type: 'Checking' },
-  ];
-
-  // In-memory crypto wallets
-  let cryptoWallets: any[] = [
-    { id: '1', coin: 'Bitcoin', symbol: 'BTC', address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', network: 'BTC' },
-    { id: '2', coin: 'Ethereum', symbol: 'ETH', address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F', network: 'ERC20' },
-    { id: '3', coin: 'Tether', symbol: 'USDT', address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F', network: 'ERC20' },
-  ];
-
-  // In-memory transactions
-  const transactions: any[] = [];
-
-  // In-memory chat messages
-  const messages: any[] = [];
 
   // API to register a new user
   app.post("/api/users/register", (req, res) => {
-    const { email } = req.body;
-    if (users.find(u => u.email === email)) {
+    const { email, name, pin } = req.body;
+    const existing = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+    if (existing) {
       return res.status(400).json({ status: "error", message: "User already exists" });
     }
 
     const newUser = {
       id: Date.now().toString(),
-      ...req.body,
+      name,
+      email,
+      pin,
       balance: 0,
       accountNumber: '8822 4411 ' + Math.floor(1000 + Math.random() * 9000),
       sortCode: '20-44-99',
       status: 'active',
       joinDate: new Date().toISOString().split('T')[0]
     };
-    users.push(newUser);
 
-    // Broadcast registration to admin
-    const payload = JSON.stringify({ type: "USER_REGISTERED", data: newUser });
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
-      }
-    });
+    db.prepare(`
+      INSERT INTO users (id, name, email, pin, balance, accountNumber, sortCode, status, joinDate)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(newUser.id, newUser.name, newUser.email, newUser.pin, newUser.balance, newUser.accountNumber, newUser.sortCode, newUser.status, newUser.joinDate);
 
     res.json({ status: "ok", user: newUser });
   });
 
-  // API to login a user (for tracking activity)
+  // API to login a user
   app.post("/api/users/login", (req, res) => {
-    const { email } = req.body;
-    const user = users.find(u => u.email === email);
+    const { email, pin } = req.body;
+    const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
     
     if (user) {
-      // Broadcast login to admin
-      const payload = JSON.stringify({ 
-        type: "USER_LOGGED_IN", 
-        data: { ...user, lastLogin: new Date().toISOString() } 
-      });
-      clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(payload);
-        }
-      });
+      if (pin && user.pin !== pin) {
+        return res.status(401).json({ status: "error", message: "Invalid PIN" });
+      }
       res.json({ status: "ok", user });
     } else {
       res.status(404).json({ status: "error", message: "User not found" });
@@ -136,27 +173,30 @@ async function startServer() {
 
   // API to get all users
   app.get("/api/users", (req, res) => {
+    const users = db.prepare("SELECT * FROM users").all();
     res.json(users);
   });
 
   // API to update user details (Admin)
   app.post("/api/admin/update-user", (req, res) => {
     const { id, balance, accountNumber, sortCode, status } = req.body;
-    const userIndex = users.findIndex(u => u.id === id);
-    if (userIndex !== -1) {
-      if (balance !== undefined) users[userIndex].balance = balance;
-      if (accountNumber !== undefined) users[userIndex].accountNumber = accountNumber;
-      if (sortCode !== undefined) users[userIndex].sortCode = sortCode;
-      if (status !== undefined) users[userIndex].status = status;
-      
-      const updatedUser = users[userIndex];
+    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+    if (user) {
+      const newBalance = balance !== undefined ? Number(balance) : user.balance;
+      const newAccountNumber = accountNumber !== undefined ? accountNumber : user.accountNumber;
+      const newSortCode = sortCode !== undefined ? sortCode : user.sortCode;
+      const newStatus = status !== undefined ? status : user.status;
 
-      // Broadcast update to the specific user
+      db.prepare(`
+        UPDATE users SET balance = ?, accountNumber = ?, sortCode = ?, status = ? WHERE id = ?
+      `).run(newBalance, newAccountNumber, newSortCode, newStatus, id);
+      
+      const updatedUser = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+
+      // Broadcast update
       const payload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
-      clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(payload);
-        }
+      clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) client.send(payload);
       });
 
       res.json({ status: "ok", user: updatedUser });
@@ -168,12 +208,13 @@ async function startServer() {
   // API to update user balance (Admin)
   app.post("/api/users/update-balance", (req, res) => {
     const { id, balance, note } = req.body;
-    const userIndex = users.findIndex(u => u.id === id);
-    if (userIndex !== -1) {
-      const oldBalance = Number(users[userIndex].balance);
+    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+    if (user) {
+      const oldBalance = Number(user.balance);
       const newBalance = Number(balance);
-      users[userIndex].balance = newBalance;
-      const updatedUser = users[userIndex];
+      
+      db.prepare("UPDATE users SET balance = ? WHERE id = ?").run(newBalance, id);
+      const updatedUser = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
 
       // Create a transaction record for the adjustment
       const adjustmentTx = {
@@ -182,24 +223,23 @@ async function startServer() {
         userName: updatedUser.name,
         type: newBalance > oldBalance ? 'deposit' : 'withdraw',
         amount: Math.abs(newBalance - oldBalance),
-        details: { 
+        details: JSON.stringify({ 
           method: 'System Adjustment',
           note: note || 'Manual balance adjustment by administrator'
-        },
+        }),
         timestamp: new Date().toISOString(),
         status: 'completed'
       };
-      transactions.push(adjustmentTx);
+
+      db.prepare(`
+        INSERT INTO transactions (id, userId, userName, type, amount, details, timestamp, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(adjustmentTx.id, adjustmentTx.userId, adjustmentTx.userName, adjustmentTx.type, adjustmentTx.amount, adjustmentTx.details, adjustmentTx.timestamp, adjustmentTx.status);
 
       // Broadcast update
       const payload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
-      const txPayload = JSON.stringify({ type: "TRANSACTION_CREATED", data: adjustmentTx });
-      
-      clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(payload);
-          client.send(txPayload);
-        }
+      clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) client.send(payload);
       });
 
       res.json({ status: "ok", user: updatedUser });
@@ -210,33 +250,34 @@ async function startServer() {
 
   // API for deposit accounts
   app.get("/api/deposit-accounts", (req, res) => {
-    res.json(depositAccounts);
+    const accounts = db.prepare("SELECT * FROM deposit_accounts").all();
+    res.json(accounts);
   });
 
   app.post("/api/admin/deposit-accounts", (req, res) => {
-    const newAccount = { id: Date.now().toString(), ...req.body };
-    depositAccounts.push(newAccount);
-    
-    // Broadcast update
-    const payload = JSON.stringify({ type: "DEPOSIT_ACCOUNTS_UPDATED", data: depositAccounts });
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
-      }
+    const { bankName, accountName, accountNumber, type } = req.body;
+    const id = Date.now().toString();
+    db.prepare(`
+      INSERT INTO deposit_accounts (id, bankName, accountName, accountNumber, type)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, bankName, accountName, accountNumber, type);
+
+    const accounts = db.prepare("SELECT * FROM deposit_accounts").all();
+    const payload = JSON.stringify({ type: "DEPOSIT_ACCOUNTS_UPDATED", data: accounts });
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) client.send(payload);
     });
 
-    res.json({ status: "ok", account: newAccount });
+    res.json({ status: "ok", account: { id, bankName, accountName, accountNumber, type } });
   });
 
   app.delete("/api/admin/deposit-accounts/:id", (req, res) => {
-    depositAccounts = depositAccounts.filter(a => a.id !== req.params.id);
-    
-    // Broadcast update
-    const payload = JSON.stringify({ type: "DEPOSIT_ACCOUNTS_UPDATED", data: depositAccounts });
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
-      }
+    db.prepare("DELETE FROM deposit_accounts WHERE id = ?").run(req.params.id);
+
+    const accounts = db.prepare("SELECT * FROM deposit_accounts").all();
+    const payload = JSON.stringify({ type: "DEPOSIT_ACCOUNTS_UPDATED", data: accounts });
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) client.send(payload);
     });
 
     res.json({ status: "ok" });
@@ -244,54 +285,48 @@ async function startServer() {
 
   // API for crypto wallets
   app.get("/api/crypto-wallets", (req, res) => {
-    res.json(cryptoWallets);
+    const wallets = db.prepare("SELECT * FROM crypto_wallets").all();
+    res.json(wallets);
   });
 
   app.post("/api/admin/crypto-wallets", (req, res) => {
-    const newWallet = { id: Date.now().toString(), ...req.body };
-    cryptoWallets.push(newWallet);
-    
-    // Broadcast update
-    const payload = JSON.stringify({ type: "CRYPTO_WALLETS_UPDATED", data: cryptoWallets });
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
-      }
+    const { coin, symbol, address, network } = req.body;
+    const id = Date.now().toString();
+    db.prepare(`
+      INSERT INTO crypto_wallets (id, coin, symbol, address, network)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, coin, symbol, address, network);
+
+    const wallets = db.prepare("SELECT * FROM crypto_wallets").all();
+    const payload = JSON.stringify({ type: "CRYPTO_WALLETS_UPDATED", data: wallets });
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) client.send(payload);
     });
 
-    res.json({ status: "ok", wallet: newWallet });
+    res.json({ status: "ok", wallet: { id, coin, symbol, address, network } });
   });
 
   app.put("/api/admin/crypto-wallets/:id", (req, res) => {
-    const { id } = req.params;
     const { address } = req.body;
-    const walletIndex = cryptoWallets.findIndex(w => w.id === id);
-    if (walletIndex !== -1) {
-      cryptoWallets[walletIndex].address = address;
-      
-      // Broadcast update
-      const payload = JSON.stringify({ type: "CRYPTO_WALLETS_UPDATED", data: cryptoWallets });
-      clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(payload);
-        }
-      });
+    db.prepare("UPDATE crypto_wallets SET address = ? WHERE id = ?").run(address, req.params.id);
+    const updated = db.prepare("SELECT * FROM crypto_wallets WHERE id = ?").get(req.params.id);
 
-      res.json({ status: "ok", wallet: cryptoWallets[walletIndex] });
-    } else {
-      res.status(404).json({ status: "error", message: "Wallet not found" });
-    }
+    const wallets = db.prepare("SELECT * FROM crypto_wallets").all();
+    const payload = JSON.stringify({ type: "CRYPTO_WALLETS_UPDATED", data: wallets });
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) client.send(payload);
+    });
+
+    res.json({ status: "ok", wallet: updated });
   });
 
   app.delete("/api/admin/crypto-wallets/:id", (req, res) => {
-    cryptoWallets = cryptoWallets.filter(w => w.id !== req.params.id);
-    
-    // Broadcast update
-    const payload = JSON.stringify({ type: "CRYPTO_WALLETS_UPDATED", data: cryptoWallets });
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
-      }
+    db.prepare("DELETE FROM crypto_wallets WHERE id = ?").run(req.params.id);
+
+    const wallets = db.prepare("SELECT * FROM crypto_wallets").all();
+    const payload = JSON.stringify({ type: "CRYPTO_WALLETS_UPDATED", data: wallets });
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) client.send(payload);
     });
 
     res.json({ status: "ok" });
@@ -302,23 +337,15 @@ async function startServer() {
     const { userId, type, amount, details } = req.body;
     const numAmount = Number(amount);
     
-    // Find user to check balance for 'send'
-    const userIndex = users.findIndex(u => u.id === userId || (userId === 'current' && u.email !== 'Jobfindercorps@gmail.com'));
-    const user = userIndex !== -1 ? users[userIndex] : null;
+    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId) as any;
 
     if (type === 'send') {
       if (!user || Number(user.balance) < numAmount) {
         return res.status(400).json({ status: "error", message: "Insufficient balance" });
       }
-      if (Number(user.balance) <= 0) {
-        return res.status(400).json({ status: "error", message: "Balance is zero" });
-      }
-      
-      // Deduct balance immediately for 'send'
-      users[userIndex].balance = Number(users[userIndex].balance) - numAmount;
+      db.prepare("UPDATE users SET balance = balance - ? WHERE id = ?").run(numAmount, userId);
     }
 
-    // For withdrawals, we don't deduct balance yet - admin must approve
     if (type === 'withdraw') {
       if (!user || Number(user.balance) < numAmount) {
         return res.status(400).json({ status: "error", message: "Insufficient balance" });
@@ -327,76 +354,70 @@ async function startServer() {
 
     const transaction = {
       id: Date.now().toString(),
-      userId: user ? user.id : userId,
+      userId: userId,
       userName: user ? user.name : 'Unknown',
-      type, // 'send' | 'withdraw' | 'deposit'
+      type,
       amount: numAmount,
-      details,
+      details: JSON.stringify(details),
       timestamp: new Date().toISOString(),
       status: 'pending'
     };
 
-    transactions.push(transaction);
+    db.prepare(`
+      INSERT INTO transactions (id, userId, userName, type, amount, details, timestamp, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(transaction.id, transaction.userId, transaction.userName, transaction.type, transaction.amount, transaction.details, transaction.timestamp, transaction.status);
 
-    // Broadcast to admin if it's a withdrawal
+    // Broadcast update for user
+    const updatedUser = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+    const payload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
+    
+    // Broadcast to admin if it's a request
+    let requestPayload: string | null = null;
     if (type === 'withdraw') {
-      const payload = JSON.stringify({ type: "WITHDRAWAL_REQUESTED", data: transaction });
-      clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(payload);
-        }
-      });
+      requestPayload = JSON.stringify({ type: "WITHDRAWAL_REQUESTED", data: { ...transaction, details: JSON.parse(transaction.details) } });
+    } else if (type === 'deposit') {
+      requestPayload = JSON.stringify({ type: "DEPOSIT_REQUESTED", data: { ...transaction, details: JSON.parse(transaction.details) } });
     }
 
-    // For deposits, broadcast to admin
-    if (type === 'deposit') {
-      const payload = JSON.stringify({ type: "DEPOSIT_REQUESTED", data: transaction });
-      clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(payload);
-        }
-      });
-    }
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+        if (requestPayload) client.send(requestPayload);
+      }
+    });
 
-    res.json({ status: "ok", transaction, user: users[userIndex] });
+    res.json({ status: "ok", transaction, user: updatedUser });
   });
 
   app.get("/api/admin/deposits", (req, res) => {
-    const pendingDeposits = transactions.filter(t => t.type === 'deposit' && t.status === 'pending');
-    res.json(pendingDeposits);
+    const deposits = db.prepare("SELECT * FROM transactions WHERE type = 'deposit' AND status = 'pending'").all();
+    res.json(deposits.map((d: any) => ({ ...d, details: JSON.parse(d.details) })));
   });
 
   app.post("/api/admin/deposits/approve", (req, res) => {
     const { id } = req.body;
-    const txIndex = transactions.findIndex(t => t.id === id);
+    const tx = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id) as any;
     
-    if (txIndex !== -1) {
-      const tx = transactions[txIndex];
-      const userIndex = users.findIndex(u => u.id === tx.userId);
+    if (tx) {
+      db.prepare("UPDATE users SET balance = balance + ? WHERE id = ?").run(tx.amount, tx.userId);
+      db.prepare("UPDATE transactions SET status = 'completed' WHERE id = ?").run(id);
       
-      if (userIndex !== -1) {
-        // Add balance for deposit
-        users[userIndex].balance += tx.amount;
-        transactions[txIndex].status = 'completed';
-        
-        const updatedUser = users[userIndex];
-        const updatedTx = transactions[txIndex];
+      const updatedUser = db.prepare("SELECT * FROM users WHERE id = ?").get(tx.userId);
+      const updatedTx = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id) as any;
 
-        // Broadcast updates
-        const userPayload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
-        const txPayload = JSON.stringify({ type: "DEPOSIT_APPROVED", data: updatedTx });
-        
-        clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(userPayload);
-            client.send(txPayload);
-          }
-        });
+      // Broadcast updates
+      const userPayload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
+      const txPayload = JSON.stringify({ type: "DEPOSIT_APPROVED", data: { ...updatedTx, details: JSON.parse(updatedTx.details) } });
+      
+      clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(userPayload);
+          client.send(txPayload);
+        }
+      });
 
-        res.json({ status: "ok", transaction: updatedTx, user: updatedUser });
-      } else {
-        res.status(404).json({ status: "error", message: "User not found" });
-      }
+      res.json({ status: "ok", transaction: updatedTx, user: updatedUser });
     } else {
       res.status(404).json({ status: "error", message: "Transaction not found" });
     }
@@ -404,66 +425,43 @@ async function startServer() {
 
   app.post("/api/admin/deposits/reject", (req, res) => {
     const { id } = req.body;
-    const txIndex = transactions.findIndex(t => t.id === id);
-    
-    if (txIndex !== -1) {
-      transactions[txIndex].status = 'failed';
-      const updatedTx = transactions[txIndex];
-
-      // Broadcast update
-      const txPayload = JSON.stringify({ type: "DEPOSIT_REJECTED", data: updatedTx });
-      clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(txPayload);
-        }
-      });
-
-      res.json({ status: "ok", transaction: updatedTx });
-    } else {
-      res.status(404).json({ status: "error", message: "Transaction not found" });
-    }
+    db.prepare("UPDATE transactions SET status = 'failed' WHERE id = ?").run(id);
+    const updatedTx = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id) as any;
+    res.json({ status: "ok", transaction: updatedTx });
   });
 
   app.get("/api/admin/withdrawals", (req, res) => {
-    const pendingWithdrawals = transactions.filter(t => t.type === 'withdraw' && t.status === 'pending');
-    res.json(pendingWithdrawals);
+    const withdrawals = db.prepare("SELECT * FROM transactions WHERE type = 'withdraw' AND status = 'pending'").all();
+    res.json(withdrawals.map((w: any) => ({ ...w, details: JSON.parse(w.details) })));
   });
 
   app.post("/api/admin/withdrawals/approve", (req, res) => {
     const { id } = req.body;
-    const txIndex = transactions.findIndex(t => t.id === id);
+    const tx = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id) as any;
     
-    if (txIndex !== -1) {
-      const tx = transactions[txIndex];
-      const userIndex = users.findIndex(u => u.id === tx.userId);
-      
-      if (userIndex !== -1) {
-        if (Number(users[userIndex].balance) < Number(tx.amount)) {
-          return res.status(400).json({ status: "error", message: "User no longer has sufficient balance" });
-        }
-        
-        // Deduct balance now
-        users[userIndex].balance = Number(users[userIndex].balance) - Number(tx.amount);
-        transactions[txIndex].status = 'completed';
-        
-        const updatedUser = users[userIndex];
-        const updatedTx = transactions[txIndex];
-
-        // Broadcast updates
-        const userPayload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
-        const txPayload = JSON.stringify({ type: "WITHDRAWAL_APPROVED", data: updatedTx });
-        
-        clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(userPayload);
-            client.send(txPayload);
-          }
-        });
-
-        res.json({ status: "ok", transaction: updatedTx, user: updatedUser });
-      } else {
-        res.status(404).json({ status: "error", message: "User not found" });
+    if (tx) {
+      const user = db.prepare("SELECT * FROM users WHERE id = ?").get(tx.userId) as any;
+      if (user.balance < tx.amount) {
+        return res.status(400).json({ status: "error", message: "Insufficient balance" });
       }
+      
+      db.prepare("UPDATE users SET balance = balance - ? WHERE id = ?").run(tx.amount, tx.userId);
+      db.prepare("UPDATE transactions SET status = 'completed' WHERE id = ?").run(id);
+      
+      const updatedUser = db.prepare("SELECT * FROM users WHERE id = ?").get(tx.userId);
+      const updatedTx = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id) as any;
+
+      const userPayload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
+      const txPayload = JSON.stringify({ type: "WITHDRAWAL_APPROVED", data: { ...updatedTx, details: JSON.parse(updatedTx.details) } });
+      
+      clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(userPayload);
+          client.send(txPayload);
+        }
+      });
+
+      res.json({ status: "ok", transaction: updatedTx, user: updatedUser });
     } else {
       res.status(404).json({ status: "error", message: "Transaction not found" });
     }
@@ -471,70 +469,27 @@ async function startServer() {
 
   app.post("/api/admin/withdrawals/reject", (req, res) => {
     const { id } = req.body;
-    const txIndex = transactions.findIndex(t => t.id === id);
-    
-    if (txIndex !== -1) {
-      transactions[txIndex].status = 'failed';
-      const updatedTx = transactions[txIndex];
-
-      // Broadcast update
-      const txPayload = JSON.stringify({ type: "WITHDRAWAL_REJECTED", data: updatedTx });
-      clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(txPayload);
-        }
-      });
-
-      res.json({ status: "ok", transaction: updatedTx });
-    } else {
-      res.status(404).json({ status: "error", message: "Transaction not found" });
-    }
+    db.prepare("UPDATE transactions SET status = 'failed' WHERE id = ?").run(id);
+    const updatedTx = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id) as any;
+    res.json({ status: "ok", transaction: updatedTx });
   });
 
   app.get("/api/transactions/:userId", (req, res) => {
-    const userTransactions = transactions.filter(t => t.userId === req.params.userId || t.userId === 'current');
-    res.json(userTransactions);
+    const txs = db.prepare("SELECT * FROM transactions WHERE userId = ? OR userId = 'current'").all(req.params.userId);
+    res.json(txs.map((t: any) => ({ ...t, details: JSON.parse(t.details) })));
   });
 
-  // API for chat messages
   app.get("/api/messages/:userId", (req, res) => {
     const { userId } = req.params;
-    // If userId is 'admin', return all messages grouped by user for the admin portal
     if (userId === 'admin') {
-      res.json(messages);
+      const msgs = db.prepare("SELECT * FROM messages").all();
+      res.json(msgs);
     } else {
-      // Return messages for a specific user (either sent by them or to them)
-      const userMessages = messages.filter(m => m.userId === userId || m.receiverId === userId);
-      res.json(userMessages);
+      const msgs = db.prepare("SELECT * FROM messages WHERE userId = ? OR receiverId = ?").all(userId, userId);
+      res.json(msgs);
     }
   });
 
-  // API to trigger a notification (for testing/integration)
-  app.post("/api/notify", (req, res) => {
-    const { title, message, type, amount, asset } = req.body;
-    
-    const notification = {
-      id: Date.now().toString(),
-      title,
-      message,
-      type, // 'receive' | 'send' | 'trade'
-      amount,
-      asset,
-      timestamp: new Date().toISOString()
-    };
-
-    const payload = JSON.stringify({ type: "NOTIFICATION", data: notification });
-    
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
-      }
-    });
-
-    res.json({ status: "ok", notification });
-  });
-
-  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

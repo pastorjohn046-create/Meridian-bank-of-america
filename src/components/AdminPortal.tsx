@@ -389,18 +389,35 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
           </div>
           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">System Administration Portal</p>
         </div>
-        <button 
-          onClick={() => {
-            setIsLoading(true);
-            fetchData();
-          }}
-          className={cn(
-            "p-2 rounded-xl transition-all active:scale-90",
-            theme === 'dark' ? "bg-zinc-900 text-zinc-400" : "bg-gray-100 text-gray-600"
-          )}
-        >
-          <RefreshCw size={16} className={cn(isLoading && "animate-spin")} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => {
+              if (window.confirm('This will clear all local browser data and reload the app. Continue?')) {
+                api.resetLocalData();
+              }
+            }}
+            className={cn(
+              "p-2 rounded-xl transition-all active:scale-90 flex items-center gap-2",
+              theme === 'dark' ? "bg-zinc-900 text-red-400" : "bg-red-50 text-red-600"
+            )}
+            title="Reset Local Data (Static Mode)"
+          >
+            <Trash2 size={16} />
+            <span className="text-[9px] font-bold uppercase tracking-widest hidden md:block">Reset Data</span>
+          </button>
+          <button 
+            onClick={() => {
+              setIsLoading(true);
+              fetchData();
+            }}
+            className={cn(
+              "p-2 rounded-xl transition-all active:scale-90",
+              theme === 'dark' ? "bg-zinc-900 text-zinc-400" : "bg-gray-100 text-gray-600"
+            )}
+          >
+            <RefreshCw size={16} className={cn(isLoading && "animate-spin")} />
+          </button>
+        </div>
       </header>
 
       {/* Tabs */}
