@@ -57,20 +57,29 @@ function AppContent() {
   useEffect(() => {
     if (!isAuthenticated || !currentUser) return;
     
-    // Poll more frequently if offline or if we want to be extra sure
-    const intervalTime = isOnline ? 10000 : 2000; 
+    // Poll more frequently to ensure balance reflects quickly
+    const intervalTime = isOnline ? 5000 : 2000; 
 
     const interval = setInterval(() => {
       api.syncCurrentUser(currentUser.id).then(updated => {
-        if (updated && JSON.stringify(updated) !== JSON.stringify(currentUserRef.current)) {
-          setCurrentUser(updated);
-          localStorage.setItem('meridian_user', JSON.stringify(updated));
+        if (updated) {
+          // Compare specific fields to avoid unnecessary updates but ensure balance is caught
+          const hasChanged = 
+            updated.balance !== currentUserRef.current?.balance || 
+            updated.status !== currentUserRef.current?.status ||
+            updated.accountNumber !== currentUserRef.current?.accountNumber;
+
+          if (hasChanged) {
+            console.log('Sync: User data updated from server');
+            setCurrentUser(updated);
+            localStorage.setItem('meridian_user', JSON.stringify(updated));
+          }
         }
       });
     }, intervalTime);
 
     return () => clearInterval(interval);
-  }, [isOnline, isAuthenticated, !!currentUser]);
+  }, [isOnline, isAuthenticated, currentUser?.id]);
 
   const handleLogin = (user: any, admin?: boolean) => {
     setCurrentUser(user);
@@ -137,8 +146,11 @@ function AppContent() {
             });
           } else if (message.type === 'USER_UPDATED') {
             const updatedUser = message.data;
-            // Only update if it's the current user
-            if (currentUserRef.current && updatedUser.id === currentUserRef.current.id) {
+            // Get current user from localStorage if ref is null (e.g. during login transition)
+            const activeUser = currentUserRef.current || JSON.parse(localStorage.getItem('meridian_user') || 'null');
+            
+            if (activeUser && updatedUser.id === activeUser.id) {
+              console.log('WS: Current user updated');
               updateUser(updatedUser);
               toast.info('Account Updated', {
                 description: 'Your account details or balance have been updated by the system.',

@@ -24,7 +24,7 @@ export const WalletScreen: React.FC<WalletProps> = ({ user }) => {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const fiatAssets = MOCK_ASSETS.filter(a => a.type === 'fiat').map(a => 
-    a.symbol === 'USD' ? { ...a, balance: user.balance, fiatValue: user.balance } : a
+    a.symbol === 'USD' ? { ...a, balance: Number(user.balance), fiatValue: Number(user.balance) } : a
   );
   const cryptoAssets = MOCK_ASSETS.filter(a => a.type === 'crypto');
 

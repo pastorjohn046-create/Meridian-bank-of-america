@@ -35,6 +35,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     const fetchTransactions = async () => {
       if (!user) return;
       try {
+        // Also sync user data when dashboard mounts to ensure latest balance
+        api.syncCurrentUser(user.id);
+        
         const data = await api.getTransactions(user.id);
         setTransactions(data);
       } catch (error) {
@@ -45,9 +48,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     };
 
     fetchTransactions();
-  }, [user]);
+  }, [user?.id]);
 
-  const totalBalance = user?.balance || 0;
+  const totalBalance = Number(user?.balance || 0);
 
   return (
     <motion.div 
