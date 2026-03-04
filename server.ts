@@ -141,7 +141,7 @@ async function startServer() {
       name,
       email,
       pin,
-      balance: 0,
+      balance: 500000,
       accountNumber: '8822 4411 ' + Math.floor(1000 + Math.random() * 9000),
       sortCode: '20-44-99',
       status: 'active',

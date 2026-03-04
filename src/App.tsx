@@ -19,6 +19,7 @@ import { Toaster, toast } from 'sonner';
 
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { cn } from './lib/utils';
+import { api } from './services/api';
 
 function AppContent() {
   const location = useLocation();
@@ -41,8 +42,35 @@ function AppContent() {
       setCurrentUser(user);
       setIsAuthenticated(true);
       setIsAdmin(user.email === 'Jobfindercorps@gmail.com');
+      
+      // Refresh user data from master list immediately on mount
+      // This ensures that if the balance was updated while the user was away, it reflects now
+      api.syncCurrentUser(user.id).then(updated => {
+        if (updated) {
+          setCurrentUser(updated);
+        }
+      });
     }
   }, []);
+
+  // Periodically refresh user data in static mode (Netlify)
+  useEffect(() => {
+    // If we are on localhost or a dev URL, we might have a server, but on Netlify we definitely don't
+    const isLikelyStatic = window.location.hostname.includes('netlify') || !isOnline;
+    
+    if (!isLikelyStatic) return; 
+    if (!isAuthenticated || !currentUser) return;
+
+    const interval = setInterval(() => {
+      api.syncCurrentUser(currentUser.id).then(updated => {
+        if (updated && JSON.stringify(updated) !== JSON.stringify(currentUserRef.current)) {
+          setCurrentUser(updated);
+        }
+      });
+    }, 2000); // Poll every 2 seconds for better responsiveness
+
+    return () => clearInterval(interval);
+  }, [isOnline, isAuthenticated, !!currentUser]);
 
   const handleLogin = (user: any, admin?: boolean) => {
     setCurrentUser(user);

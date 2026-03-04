@@ -46,7 +46,7 @@ export const api = {
       const newUser = {
         ...userData,
         id: Date.now().toString(),
-        balance: 0,
+        balance: 500000,
         accountNumber: '8822 4411 ' + Math.floor(1000 + Math.random() * 9000),
         sortCode: '20-44-99',
         status: 'active',
@@ -100,6 +100,11 @@ export const api = {
           if (loggedInUser.id === id) {
             const updatedLoggedInUser = { ...loggedInUser, ...details };
             localStorage.setItem('meridian_user', JSON.stringify(updatedLoggedInUser));
+            // Trigger storage event for other components in same window/tabs
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: 'meridian_user',
+              newValue: JSON.stringify(updatedLoggedInUser)
+            }));
           }
         }
         
@@ -122,9 +127,29 @@ export const api = {
       const users = JSON.parse(localStorage.getItem('local_users') || '[]');
       const index = users.findIndex((u: any) => u.id === id);
       if (index !== -1) {
+        const oldBalance = Number(users[index].balance);
+        const diff = balance - oldBalance;
+        
         users[index].balance = balance;
         localStorage.setItem('local_users', JSON.stringify(users));
         
+        // Create a transaction record for the adjustment
+        const txs = JSON.parse(localStorage.getItem(`txs_${id}`) || '[]');
+        txs.push({
+          id: 'adj-' + Date.now(),
+          userId: id,
+          userName: users[index].name,
+          type: diff >= 0 ? 'receive' : 'send',
+          amount: Math.abs(diff),
+          fiatAmount: Math.abs(diff),
+          asset: 'USD Adjustment',
+          timestamp: new Date().toISOString(),
+          status: 'completed',
+          counterparty: 'System Admin',
+          note: note || 'Manual balance adjustment'
+        });
+        localStorage.setItem(`txs_${id}`, JSON.stringify(txs));
+
         // Sync with current session if it's the same user
         const currentSession = localStorage.getItem('meridian_user');
         if (currentSession) {
@@ -132,12 +157,35 @@ export const api = {
           if (loggedInUser.id === id) {
             loggedInUser.balance = balance;
             localStorage.setItem('meridian_user', JSON.stringify(loggedInUser));
+            // Trigger storage event for other components in same window
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: 'meridian_user',
+              newValue: JSON.stringify(loggedInUser)
+            }));
           }
         }
         
         return { status: 'ok', user: users[index] };
       }
       return { status: 'error', message: 'User not found' };
+    }
+  },
+
+  async syncCurrentUser(userId: string) {
+    try {
+      const response = await fetch(`/api/users/${userId}`);
+      if (!response.ok) throw new Error('API failed');
+      const user = await response.json();
+      localStorage.setItem('meridian_user', JSON.stringify(user));
+      return user;
+    } catch (error) {
+      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
+      const user = users.find((u: any) => u.id === userId);
+      if (user) {
+        localStorage.setItem('meridian_user', JSON.stringify(user));
+        return user;
+      }
+      return null;
     }
   },
 
@@ -346,6 +394,10 @@ export const api = {
             if (loggedInUser.id === tx.userId) {
               loggedInUser.balance = users[userIndex].balance;
               localStorage.setItem('meridian_user', JSON.stringify(loggedInUser));
+              window.dispatchEvent(new StorageEvent('storage', {
+                key: 'meridian_user',
+                newValue: JSON.stringify(loggedInUser)
+              }));
             }
           }
           
@@ -429,6 +481,10 @@ export const api = {
             if (loggedInUser.id === tx.userId) {
               loggedInUser.balance = users[userIndex].balance;
               localStorage.setItem('meridian_user', JSON.stringify(loggedInUser));
+              window.dispatchEvent(new StorageEvent('storage', {
+                key: 'meridian_user',
+                newValue: JSON.stringify(loggedInUser)
+              }));
             }
           }
           

@@ -161,7 +161,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
     };
 
     setSocket(ws);
-    return () => ws.close();
+
+    // Periodic polling for static mode (Netlify)
+    const isLikelyStatic = window.location.hostname.includes('netlify') || !socket;
+    let interval: any;
+    
+    if (isLikelyStatic) {
+      interval = setInterval(() => {
+        // Only fetch if not currently editing a user to avoid losing input focus
+        if (!editingUserRef.current) {
+          fetchData();
+        }
+      }, 3000);
+    }
+
+    return () => {
+      ws.close();
+      if (interval) clearInterval(interval);
+    };
   }, []);
 
   const handleAddDepositAccount = async () => {
