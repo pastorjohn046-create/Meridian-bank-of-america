@@ -28,20 +28,6 @@ export const TransactionDetails: React.FC = () => {
           const found = transactions.find(t => t.id === id);
           if (found) {
             setTx(found);
-            return;
-          }
-        }
-
-        // Fallback: search all txs keys in localStorage
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key?.startsWith('txs_')) {
-            const txs = JSON.parse(localStorage.getItem(key) || '[]');
-            const found = txs.find((t: any) => t.id === id);
-            if (found) {
-              setTx(found);
-              return;
-            }
           }
         }
       } catch (error) {

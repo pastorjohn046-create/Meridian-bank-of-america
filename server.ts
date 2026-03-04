@@ -53,18 +53,21 @@ db.exec(`
     userId TEXT,
     receiverId TEXT,
     text TEXT,
-    sender TEXT,
+    senderName TEXT,
     timestamp TEXT
   );
 `);
 
 // Seed initial admin if not exists
-const adminExists = db.prepare("SELECT * FROM users WHERE email = ?").get("Jobfindercorps@gmail.com");
+const adminExists = db.prepare("SELECT * FROM users WHERE email = ?").get("Jobfindercorps@gmail.com") as any;
 if (!adminExists) {
   db.prepare(`
     INSERT INTO users (id, name, email, pin, balance, accountNumber, sortCode, status, joinDate)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run("admin-1", "Administrator", "Jobfindercorps@gmail.com", "1111", 1250000, "8822 4411 0099", "20-44-99", "active", "2023-01-01");
+  `).run("admin-1", "Administrator", "Jobfindercorps@gmail.com", "Revelation111", 1250000, "8822 4411 0099", "20-44-99", "active", "2023-01-01");
+} else if (adminExists.pin === '1111') {
+  // Update old admin pin to the new one
+  db.prepare("UPDATE users SET pin = ? WHERE email = ?").run("Revelation111", "Jobfindercorps@gmail.com");
 }
 
 // Seed initial deposit account if empty
@@ -108,9 +111,9 @@ async function startServer() {
           };
           
           db.prepare(`
-            INSERT INTO messages (id, userId, receiverId, text, sender, timestamp)
+            INSERT INTO messages (id, userId, receiverId, text, senderName, timestamp)
             VALUES (?, ?, ?, ?, ?, ?)
-          `).run(chatMsg.id, chatMsg.userId, chatMsg.receiverId, chatMsg.text, chatMsg.sender, chatMsg.timestamp);
+          `).run(chatMsg.id, chatMsg.userId, chatMsg.receiverId, chatMsg.text, chatMsg.senderName, chatMsg.timestamp);
           
           // Broadcast to all clients
           const payload = JSON.stringify({ type: "CHAT_MESSAGE", data: chatMsg });
@@ -141,7 +144,7 @@ async function startServer() {
       name,
       email,
       pin,
-      balance: 500000,
+      balance: 1250000,
       accountNumber: '8822 4411 ' + Math.floor(1000 + Math.random() * 9000),
       sortCode: '20-44-99',
       status: 'active',
@@ -153,7 +156,29 @@ async function startServer() {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(newUser.id, newUser.name, newUser.email, newUser.pin, newUser.balance, newUser.accountNumber, newUser.sortCode, newUser.status, newUser.joinDate);
 
+    // Broadcast new user registration
+    const payload = JSON.stringify({ type: "USER_REGISTERED", data: newUser });
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    });
+
     res.json({ status: "ok", user: newUser });
+  });
+
+  // API to send a message (fallback for persistence)
+  app.post("/api/messages", (req, res) => {
+    const { userId, receiverId, text, senderName, isAdmin } = req.body;
+    const id = Date.now().toString();
+    const timestamp = new Date().toISOString();
+    
+    db.prepare(`
+      INSERT INTO messages (id, userId, receiverId, text, senderName, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, userId, receiverId, text, senderName, timestamp);
+    
+    res.json({ status: "ok", message: { id, userId, receiverId, text, senderName, isAdmin, timestamp } });
   });
 
   // API to login a user
@@ -177,6 +202,16 @@ async function startServer() {
     res.json(users);
   });
 
+  // API to get a single user
+  app.get("/api/users/:id", (req, res) => {
+    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.params.id);
+    if (user) {
+      res.json(user);
+    } else {
+      res.status(404).json({ status: "error", message: "User not found" });
+    }
+  });
+
   // API to update user details (Admin)
   app.post("/api/admin/update-user", (req, res) => {
     const { id, balance, accountNumber, sortCode, status } = req.body;
@@ -192,6 +227,7 @@ async function startServer() {
       `).run(newBalance, newAccountNumber, newSortCode, newStatus, id);
       
       const updatedUser = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+      console.log(`Broadcasting update for user ${id}: Balance ${newBalance}`);
 
       // Broadcast update
       const payload = JSON.stringify({ type: "USER_UPDATED", data: updatedUser });
@@ -215,6 +251,7 @@ async function startServer() {
       
       db.prepare("UPDATE users SET balance = ? WHERE id = ?").run(newBalance, id);
       const updatedUser = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+      console.log(`Broadcasting balance adjustment for user ${id}: New Balance ${newBalance}`);
 
       // Create a transaction record for the adjustment
       const adjustmentTx = {

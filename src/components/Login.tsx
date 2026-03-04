@@ -23,35 +23,17 @@ export const LoginScreen: React.FC<AuthProps> = ({ onLogin }) => {
     setIsLoading(true);
     
     try {
-      const isAdmin = email === 'Jobfindercorps@gmail.com' && password === 'Revelation111';
+      const result = await api.loginUser(email, password);
       
-      if (isAdmin) {
-        // Try to find admin in the users list
-        const adminUser = await fetch('/api/users').then(res => res.json()).then(users => users.find((u: any) => u.email === email));
-        onLogin(adminUser || { email, name: 'Administrator', id: 'admin-1' }, true);
+      if (result.status === 'ok') {
+        onLogin(result.user, result.user.email === 'Jobfindercorps@gmail.com');
         navigate('/');
-        return;
-      }
-
-      // For regular users, try to login via API
-      const response = await fetch('/api/users/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        onLogin(result.user, false);
       } else {
-        // Fallback for demo if user not found (or if it's a new signup that hasn't synced yet)
-        onLogin({ email, name: email.split('@')[0], id: Date.now().toString(), balance: 0 }, false);
+        import('sonner').then(({ toast }) => toast.error(result.message || 'Login failed.'));
       }
-      navigate('/');
     } catch (error) {
       console.error('Login failed:', error);
-      onLogin({ email, name: email.split('@')[0], id: Date.now().toString(), balance: 0 }, false);
-      navigate('/');
+      import('sonner').then(({ toast }) => toast.error('Server connection failed. Please try again.'));
     } finally {
       setIsLoading(false);
     }

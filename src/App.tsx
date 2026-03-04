@@ -53,21 +53,21 @@ function AppContent() {
     }
   }, []);
 
-  // Periodically refresh user data in static mode (Netlify)
+  // Periodically refresh user data as a fallback
   useEffect(() => {
-    // If we are on localhost or a dev URL, we might have a server, but on Netlify we definitely don't
-    const isLikelyStatic = window.location.hostname.includes('netlify') || !isOnline;
-    
-    if (!isLikelyStatic) return; 
     if (!isAuthenticated || !currentUser) return;
+    
+    // Poll more frequently if offline or if we want to be extra sure
+    const intervalTime = isOnline ? 10000 : 2000; 
 
     const interval = setInterval(() => {
       api.syncCurrentUser(currentUser.id).then(updated => {
         if (updated && JSON.stringify(updated) !== JSON.stringify(currentUserRef.current)) {
           setCurrentUser(updated);
+          localStorage.setItem('meridian_user', JSON.stringify(updated));
         }
       });
-    }, 2000); // Poll every 2 seconds for better responsiveness
+    }, intervalTime);
 
     return () => clearInterval(interval);
   }, [isOnline, isAuthenticated, !!currentUser]);
@@ -93,45 +93,71 @@ function AppContent() {
   };
 
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
-    const socket = new WebSocket(wsUrl);
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+    let heartbeatInterval: any = null;
 
-    socket.onopen = () => {
-      console.log('Connected to notifications');
-      setIsOnline(true);
-    };
+    const connect = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      socket = new WebSocket(wsUrl);
 
-    socket.onerror = (error) => {
-      console.warn('WebSocket connection failed. Notifications will be disabled.');
-      setIsOnline(false);
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        if (message.type === 'NOTIFICATION') {
-          const { title, message: text, amount, asset } = message.data;
-          toast.success(title, {
-            description: `${text} ${amount ? `(${amount} ${asset})` : ''}`,
-            duration: 5000,
-          });
-        } else if (message.type === 'USER_UPDATED') {
-          const updatedUser = message.data;
-          // Only update if it's the current user
-          if (currentUserRef.current && updatedUser.id === currentUserRef.current.id) {
-            updateUser(updatedUser);
-            toast.info('Account Updated', {
-              description: 'Your account details or balance have been updated by the system.',
-            });
+      socket.onopen = () => {
+        console.log('Connected to notifications');
+        setIsOnline(true);
+        
+        // Heartbeat to keep connection alive (important for Railway/Cloud)
+        heartbeatInterval = setInterval(() => {
+          if (socket?.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'PING' }));
           }
+        }, 30000);
+      };
+
+      socket.onerror = (error) => {
+        console.warn('WebSocket connection failed. Notifications will be disabled.');
+        setIsOnline(false);
+      };
+
+      socket.onclose = () => {
+        console.log('WebSocket disconnected. Reconnecting...');
+        setIsOnline(false);
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        reconnectTimeout = setTimeout(connect, 3000); // Try to reconnect every 3 seconds
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'NOTIFICATION') {
+            const { title, message: text, amount, asset } = message.data;
+            toast.success(title, {
+              description: `${text} ${amount ? `(${amount} ${asset})` : ''}`,
+              duration: 5000,
+            });
+          } else if (message.type === 'USER_UPDATED') {
+            const updatedUser = message.data;
+            // Only update if it's the current user
+            if (currentUserRef.current && updatedUser.id === currentUserRef.current.id) {
+              updateUser(updatedUser);
+              toast.info('Account Updated', {
+                description: 'Your account details or balance have been updated by the system.',
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse WS message', e);
         }
-      } catch (e) {
-        console.error('Failed to parse WS message', e);
-      }
+      };
     };
 
-    return () => socket.close();
+    connect();
+
+    return () => {
+      if (socket) socket.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -169,15 +195,6 @@ function AppContent() {
       )}>
         {showHeader && <Header onOpenChat={() => setIsChatOpen(true)} />}
         
-        {!isOnline && (
-          <div className="bg-amber-500/10 border-y border-amber-500/20 py-1.5 px-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Static Mode Active</p>
-            </div>
-            <p className="text-[8px] text-amber-600/80 font-medium">Data is saved locally in your browser</p>
-          </div>
-        )}
         <main className={cn(
           "flex-1 overflow-y-auto no-scrollbar",
           showHeader ? "pt-2" : ""

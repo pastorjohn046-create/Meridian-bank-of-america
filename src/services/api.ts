@@ -1,7 +1,5 @@
 import { Transaction } from '../types';
 
-// Helper to handle API calls with a fallback to localStorage for static deployments
-// This ensures the app works even on static hosts like Netlify where the Express server isn't running
 export const api = {
   // --- Users ---
   async getUsers() {
@@ -10,24 +8,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const local = localStorage.getItem('local_users');
-      if (!local) {
-        // Seed initial admin user if empty
-        const initialUsers = [{
-          id: 'admin-1',
-          name: 'System Admin',
-          email: 'Jobfindercorps@gmail.com',
-          pin: '1111',
-          balance: 1000000,
-          accountNumber: '8822 4411 9900',
-          sortCode: '20-44-99',
-          status: 'active',
-          joinDate: '2024-01-01'
-        }];
-        localStorage.setItem('local_users', JSON.stringify(initialUsers));
-        return initialUsers;
-      }
-      return JSON.parse(local);
+      console.error('API Error (getUsers):', error);
+      throw error;
     }
   },
 
@@ -42,20 +24,8 @@ export const api = {
       if (!response.ok) return { status: 'error', message: data.message || 'Registration failed' };
       return data;
     } catch (error) {
-      console.warn('Using local storage for registration');
-      const newUser = {
-        ...userData,
-        id: Date.now().toString(),
-        balance: 500000,
-        accountNumber: '8822 4411 ' + Math.floor(1000 + Math.random() * 9000),
-        sortCode: '20-44-99',
-        status: 'active',
-        joinDate: new Date().toISOString().split('T')[0]
-      };
-      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-      users.push(newUser);
-      localStorage.setItem('local_users', JSON.stringify(users));
-      return { status: 'ok', user: newUser };
+      console.error('API Error (registerUser):', error);
+      return { status: 'error', message: 'Server connection failed. Please try again.' };
     }
   },
 
@@ -70,10 +40,8 @@ export const api = {
       if (!response.ok) return { status: 'error', message: data.message || 'Login failed' };
       return data;
     } catch (error) {
-      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-      const user = users.find((u: any) => u.email === email);
-      if (user) return { status: 'ok', user };
-      return { status: 'error', message: 'User not found' };
+      console.error('API Error (loginUser):', error);
+      return { status: 'error', message: 'Server connection failed. Please try again.' };
     }
   },
 
@@ -84,33 +52,14 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...details })
       });
-      if (!response.ok) throw new Error('API failed');
-      return await response.json();
-    } catch (error) {
-      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-      const index = users.findIndex((u: any) => u.id === id);
-      if (index !== -1) {
-        users[index] = { ...users[index], ...details };
-        localStorage.setItem('local_users', JSON.stringify(users));
-        
-        // Sync with current session if it's the same user
-        const currentSession = localStorage.getItem('meridian_user');
-        if (currentSession) {
-          const loggedInUser = JSON.parse(currentSession);
-          if (loggedInUser.id === id) {
-            const updatedLoggedInUser = { ...loggedInUser, ...details };
-            localStorage.setItem('meridian_user', JSON.stringify(updatedLoggedInUser));
-            // Trigger storage event for other components in same window/tabs
-            window.dispatchEvent(new StorageEvent('storage', {
-              key: 'meridian_user',
-              newValue: JSON.stringify(updatedLoggedInUser)
-            }));
-          }
-        }
-        
-        return { status: 'ok', user: users[index] };
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'API failed');
       }
-      return { status: 'error', message: 'User not found' };
+      return await response.json();
+    } catch (error: any) {
+      console.error('Update user details failed:', error);
+      return { status: 'error', message: error.message || 'Server connection failed' };
     }
   },
 
@@ -121,53 +70,14 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, balance, note })
       });
-      if (!response.ok) throw new Error('API failed');
-      return await response.json();
-    } catch (error) {
-      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-      const index = users.findIndex((u: any) => u.id === id);
-      if (index !== -1) {
-        const oldBalance = Number(users[index].balance);
-        const diff = balance - oldBalance;
-        
-        users[index].balance = balance;
-        localStorage.setItem('local_users', JSON.stringify(users));
-        
-        // Create a transaction record for the adjustment
-        const txs = JSON.parse(localStorage.getItem(`txs_${id}`) || '[]');
-        txs.push({
-          id: 'adj-' + Date.now(),
-          userId: id,
-          userName: users[index].name,
-          type: diff >= 0 ? 'receive' : 'send',
-          amount: Math.abs(diff),
-          fiatAmount: Math.abs(diff),
-          asset: 'USD Adjustment',
-          timestamp: new Date().toISOString(),
-          status: 'completed',
-          counterparty: 'System Admin',
-          note: note || 'Manual balance adjustment'
-        });
-        localStorage.setItem(`txs_${id}`, JSON.stringify(txs));
-
-        // Sync with current session if it's the same user
-        const currentSession = localStorage.getItem('meridian_user');
-        if (currentSession) {
-          const loggedInUser = JSON.parse(currentSession);
-          if (loggedInUser.id === id) {
-            loggedInUser.balance = balance;
-            localStorage.setItem('meridian_user', JSON.stringify(loggedInUser));
-            // Trigger storage event for other components in same window
-            window.dispatchEvent(new StorageEvent('storage', {
-              key: 'meridian_user',
-              newValue: JSON.stringify(loggedInUser)
-            }));
-          }
-        }
-        
-        return { status: 'ok', user: users[index] };
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'API failed');
       }
-      return { status: 'error', message: 'User not found' };
+      return await response.json();
+    } catch (error: any) {
+      console.error('Update balance failed:', error);
+      return { status: 'error', message: error.message || 'Server connection failed' };
     }
   },
 
@@ -179,12 +89,7 @@ export const api = {
       localStorage.setItem('meridian_user', JSON.stringify(user));
       return user;
     } catch (error) {
-      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-      const user = users.find((u: any) => u.id === userId);
-      if (user) {
-        localStorage.setItem('meridian_user', JSON.stringify(user));
-        return user;
-      }
+      console.error('Sync current user failed:', error);
       return null;
     }
   },
@@ -196,7 +101,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      return JSON.parse(localStorage.getItem('local_deposit_accounts') || '[]');
+      console.error('Get deposit accounts failed:', error);
+      throw error;
     }
   },
 
@@ -210,11 +116,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const accounts = JSON.parse(localStorage.getItem('local_deposit_accounts') || '[]');
-      const newAccount = { ...account, id: Date.now().toString() };
-      accounts.push(newAccount);
-      localStorage.setItem('local_deposit_accounts', JSON.stringify(accounts));
-      return { status: 'ok', account: newAccount };
+      console.error('Add deposit account failed:', error);
+      throw error;
     }
   },
 
@@ -224,10 +127,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const accounts = JSON.parse(localStorage.getItem('local_deposit_accounts') || '[]');
-      const filtered = accounts.filter((a: any) => a.id !== id);
-      localStorage.setItem('local_deposit_accounts', JSON.stringify(filtered));
-      return { status: 'ok' };
+      console.error('Delete deposit account failed:', error);
+      throw error;
     }
   },
 
@@ -238,7 +139,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      return JSON.parse(localStorage.getItem('local_crypto_wallets') || '[]');
+      console.error('Get crypto wallets failed:', error);
+      throw error;
     }
   },
 
@@ -252,11 +154,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const wallets = JSON.parse(localStorage.getItem('local_crypto_wallets') || '[]');
-      const newWallet = { ...wallet, id: Date.now().toString() };
-      wallets.push(newWallet);
-      localStorage.setItem('local_crypto_wallets', JSON.stringify(wallets));
-      return { status: 'ok', wallet: newWallet };
+      console.error('Add crypto wallet failed:', error);
+      throw error;
     }
   },
 
@@ -270,14 +169,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const wallets = JSON.parse(localStorage.getItem('local_crypto_wallets') || '[]');
-      const index = wallets.findIndex((w: any) => w.id === id);
-      if (index !== -1) {
-        wallets[index].address = address;
-        localStorage.setItem('local_crypto_wallets', JSON.stringify(wallets));
-        return { status: 'ok', wallet: wallets[index] };
-      }
-      return { status: 'error', message: 'Wallet not found' };
+      console.error('Update crypto wallet failed:', error);
+      throw error;
     }
   },
 
@@ -287,10 +180,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const wallets = JSON.parse(localStorage.getItem('local_crypto_wallets') || '[]');
-      const filtered = wallets.filter((w: any) => w.id !== id);
-      localStorage.setItem('local_crypto_wallets', JSON.stringify(filtered));
-      return { status: 'ok' };
+      console.error('Delete crypto wallet failed:', error);
+      throw error;
     }
   },
 
@@ -301,8 +192,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const localTxs = localStorage.getItem(`txs_${userId}`);
-      return localTxs ? JSON.parse(localTxs) : [];
+      console.error('Get transactions failed:', error);
+      throw error;
     }
   },
 
@@ -316,32 +207,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const txs = JSON.parse(localStorage.getItem(`txs_${txData.userId}`) || '[]');
-      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-      const user = users.find((u: any) => u.id === txData.userId);
-      
-      const newTx = {
-        ...txData,
-        id: Date.now().toString(),
-        userName: user ? user.name : 'Unknown',
-        timestamp: new Date().toISOString(),
-        status: 'pending'
-      };
-      txs.push(newTx);
-      localStorage.setItem(`txs_${txData.userId}`, JSON.stringify(txs));
-      
-      // Also store in a global pending list for admin
-      if (txData.type === 'withdraw') {
-        const allWithdrawals = JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
-        allWithdrawals.push(newTx);
-        localStorage.setItem('local_pending_withdrawals', JSON.stringify(allWithdrawals));
-      } else if (txData.type === 'deposit') {
-        const allDeposits = JSON.parse(localStorage.getItem('local_pending_deposits') || '[]');
-        allDeposits.push(newTx);
-        localStorage.setItem('local_pending_deposits', JSON.stringify(allDeposits));
-      }
-
-      return { status: 'ok', transaction: newTx };
+      console.error('Create transaction failed:', error);
+      throw error;
     }
   },
 
@@ -351,7 +218,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      return JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
+      console.error('Get pending withdrawals failed:', error);
+      throw error;
     }
   },
 
@@ -361,7 +229,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      return JSON.parse(localStorage.getItem('local_pending_deposits') || '[]');
+      console.error('Get pending deposits failed:', error);
+      throw error;
     }
   },
 
@@ -375,46 +244,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const allDeposits = JSON.parse(localStorage.getItem('local_pending_deposits') || '[]');
-      const txIndex = allDeposits.findIndex((t: any) => t.id === id);
-      
-      if (txIndex !== -1) {
-        const tx = allDeposits[txIndex];
-        const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-        const userIndex = users.findIndex((u: any) => u.id === tx.userId);
-        
-        if (userIndex !== -1) {
-          users[userIndex].balance += tx.amount;
-          localStorage.setItem('local_users', JSON.stringify(users));
-          
-          // Sync with current session if it's the same user
-          const currentSession = localStorage.getItem('meridian_user');
-          if (currentSession) {
-            const loggedInUser = JSON.parse(currentSession);
-            if (loggedInUser.id === tx.userId) {
-              loggedInUser.balance = users[userIndex].balance;
-              localStorage.setItem('meridian_user', JSON.stringify(loggedInUser));
-              window.dispatchEvent(new StorageEvent('storage', {
-                key: 'meridian_user',
-                newValue: JSON.stringify(loggedInUser)
-              }));
-            }
-          }
-          
-          const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
-          const userTxIndex = userTxs.findIndex((t: any) => t.id === id);
-          if (userTxIndex !== -1) {
-            userTxs[userTxIndex].status = 'completed';
-            localStorage.setItem(`txs_${tx.userId}`, JSON.stringify(userTxs));
-          }
-          
-          allDeposits.splice(txIndex, 1);
-          localStorage.setItem('local_pending_deposits', JSON.stringify(allDeposits));
-          
-          return { status: 'ok', user: users[userIndex] };
-        }
-      }
-      return { status: 'error', message: 'Deposit not found' };
+      console.error('Approve deposit failed:', error);
+      throw error;
     }
   },
 
@@ -428,22 +259,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const allDeposits = JSON.parse(localStorage.getItem('local_pending_deposits') || '[]');
-      const txIndex = allDeposits.findIndex((t: any) => t.id === id);
-      
-      if (txIndex !== -1) {
-        const tx = allDeposits[txIndex];
-        const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
-        const userTxIndex = userTxs.findIndex((t: any) => t.id === id);
-        if (userTxIndex !== -1) {
-          userTxs[userTxIndex].status = 'failed';
-          localStorage.setItem(`txs_${tx.userId}`, JSON.stringify(userTxs));
-        }
-        allDeposits.splice(txIndex, 1);
-        localStorage.setItem('local_pending_deposits', JSON.stringify(allDeposits));
-        return { status: 'ok' };
-      }
-      return { status: 'error', message: 'Deposit not found' };
+      console.error('Reject deposit failed:', error);
+      throw error;
     }
   },
 
@@ -457,53 +274,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const allWithdrawals = JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
-      const txIndex = allWithdrawals.findIndex((t: any) => t.id === id);
-      
-      if (txIndex !== -1) {
-        const tx = allWithdrawals[txIndex];
-        const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-        const userIndex = users.findIndex((u: any) => u.id === tx.userId);
-        
-        if (userIndex !== -1) {
-          if (users[userIndex].balance < tx.amount) {
-            return { status: 'error', message: 'Insufficient balance' };
-          }
-          
-          // Deduct balance
-          users[userIndex].balance -= tx.amount;
-          localStorage.setItem('local_users', JSON.stringify(users));
-          
-          // Sync with current session if it's the same user
-          const currentSession = localStorage.getItem('meridian_user');
-          if (currentSession) {
-            const loggedInUser = JSON.parse(currentSession);
-            if (loggedInUser.id === tx.userId) {
-              loggedInUser.balance = users[userIndex].balance;
-              localStorage.setItem('meridian_user', JSON.stringify(loggedInUser));
-              window.dispatchEvent(new StorageEvent('storage', {
-                key: 'meridian_user',
-                newValue: JSON.stringify(loggedInUser)
-              }));
-            }
-          }
-          
-          // Update transaction status in user's list
-          const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
-          const userTxIndex = userTxs.findIndex((t: any) => t.id === id);
-          if (userTxIndex !== -1) {
-            userTxs[userTxIndex].status = 'completed';
-            localStorage.setItem(`txs_${tx.userId}`, JSON.stringify(userTxs));
-          }
-          
-          // Remove from pending
-          allWithdrawals.splice(txIndex, 1);
-          localStorage.setItem('local_pending_withdrawals', JSON.stringify(allWithdrawals));
-          
-          return { status: 'ok', user: users[userIndex] };
-        }
-      }
-      return { status: 'error', message: 'Withdrawal not found' };
+      console.error('Approve withdrawal failed:', error);
+      throw error;
     }
   },
 
@@ -517,27 +289,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const allWithdrawals = JSON.parse(localStorage.getItem('local_pending_withdrawals') || '[]');
-      const txIndex = allWithdrawals.findIndex((t: any) => t.id === id);
-      
-      if (txIndex !== -1) {
-        const tx = allWithdrawals[txIndex];
-        
-        // Update transaction status in user's list
-        const userTxs = JSON.parse(localStorage.getItem(`txs_${tx.userId}`) || '[]');
-        const userTxIndex = userTxs.findIndex((t: any) => t.id === id);
-        if (userTxIndex !== -1) {
-          userTxs[userTxIndex].status = 'failed';
-          localStorage.setItem(`txs_${tx.userId}`, JSON.stringify(userTxs));
-        }
-        
-        // Remove from pending
-        allWithdrawals.splice(txIndex, 1);
-        localStorage.setItem('local_pending_withdrawals', JSON.stringify(allWithdrawals));
-        
-        return { status: 'ok' };
-      }
-      return { status: 'error', message: 'Withdrawal not found' };
+      console.error('Reject withdrawal failed:', error);
+      throw error;
     }
   },
 
@@ -548,7 +301,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      return JSON.parse(localStorage.getItem(`withdrawal_methods_${userId}`) || '[]');
+      console.error('Get withdrawal methods failed:', error);
+      throw error;
     }
   },
 
@@ -562,11 +316,8 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const methods = JSON.parse(localStorage.getItem(`withdrawal_methods_${userId}`) || '[]');
-      const newMethod = { ...method, id: Date.now().toString() };
-      methods.push(newMethod);
-      localStorage.setItem(`withdrawal_methods_${userId}`, JSON.stringify(methods));
-      return { status: 'ok', method: newMethod };
+      console.error('Add withdrawal method failed:', error);
+      throw error;
     }
   },
 
@@ -577,15 +328,13 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const allMessages = JSON.parse(localStorage.getItem('local_messages') || '[]');
-      if (userId === 'admin') return allMessages;
-      return allMessages.filter((m: any) => m.userId === userId || m.receiverId === userId);
+      console.error('Get messages failed:', error);
+      throw error;
     }
   },
 
   async sendMessage(messageData: any) {
     try {
-      // We still try to use the WebSocket if possible, but this is for history persistence
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -594,35 +343,13 @@ export const api = {
       if (!response.ok) throw new Error('API failed');
       return await response.json();
     } catch (error) {
-      const allMessages = JSON.parse(localStorage.getItem('local_messages') || '[]');
-      const newMessage = {
-        ...messageData,
-        id: Date.now().toString(),
-        timestamp: new Date().toISOString()
-      };
-      allMessages.push(newMessage);
-      localStorage.setItem('local_messages', JSON.stringify(allMessages));
-      return { status: 'ok', message: newMessage };
+      console.error('Send message failed:', error);
+      throw error;
     }
   },
 
   resetLocalData() {
-    const keys = [
-      'local_users', 
-      'local_deposit_accounts', 
-      'local_crypto_wallets', 
-      'local_pending_withdrawals', 
-      'local_pending_deposits',
-      'local_messages'
-    ];
-    // Also clear user-specific transaction lists
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('txs_') || key.startsWith('withdrawal_methods_') || key.startsWith('messages_'))) {
-        keys.push(key);
-      }
-    }
-    keys.forEach(k => localStorage.removeItem(k));
+    localStorage.clear();
     window.location.reload();
   }
 };

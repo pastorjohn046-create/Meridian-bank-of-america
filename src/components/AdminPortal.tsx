@@ -63,6 +63,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
   const [adjustmentAmount, setAdjustmentAmount] = useState('');
   const [editAccountNumber, setEditAccountNumber] = useState('');
   const [editSortCode, setEditSortCode] = useState('');
+  const [editBalance, setEditBalance] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'users' | 'deposits' | 'crypto' | 'support' | 'withdrawals' | 'pending_deposits'>('users');
   const [allMessages, setAllMessages] = useState<any[]>([]);
@@ -106,78 +107,88 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
   useEffect(() => {
     fetchData();
 
-    // Connect WebSocket for real-time chat
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+    let heartbeatInterval: any = null;
 
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        if (message.type === 'CHAT_MESSAGE') {
-          setAllMessages(prev => {
-            if (prev.some(m => m.id === message.data.id)) return prev;
-            return [...prev, message.data];
-          });
-          toast.info(`New message from ${message.data.senderName}`);
-        } else if (message.type === 'USER_REGISTERED') {
-          setUsers(prev => {
-            if (prev.some(u => u.id === message.data.id)) return prev;
-            return [message.data, ...prev];
-          });
-          toast.success(`New user registered: ${message.data.name}`);
-        } else if (message.type === 'USER_LOGGED_IN') {
-          toast.info(`User logged in: ${message.data.name}`);
-          // Optionally update user status or last login time in the list
-          setUsers(prev => prev.map(u => u.id === message.data.id ? { ...u, lastLogin: message.data.lastLogin } : u));
-        } else if (message.type === 'USER_UPDATED') {
-          setUsers(prev => prev.map(u => u.id === message.data.id ? message.data : u));
-          if (editingUserRef.current && editingUserRef.current.id === message.data.id) {
-            setEditingUser(message.data);
-            // Update input fields if they are currently editing this user
-            setEditAccountNumber(message.data.accountNumber || '');
-            setEditSortCode(message.data.sortCode || '');
+    const connect = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('Admin connected to notifications');
+        
+        // Heartbeat to keep connection alive
+        heartbeatInterval = setInterval(() => {
+          if (ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'PING' }));
           }
-        } else if (message.type === 'DEPOSIT_ACCOUNTS_UPDATED') {
-          setDepositAccounts(message.data);
-          toast.info('Deposit accounts updated');
-        } else if (message.type === 'CRYPTO_WALLETS_UPDATED') {
-          setCryptoWallets(message.data);
-          toast.info('Crypto wallets updated');
-        } else if (message.type === 'WITHDRAWAL_REQUESTED') {
-          setPendingWithdrawals(prev => [...prev, message.data]);
-          toast.info(`New withdrawal request from ${message.data.userName}`);
-        } else if (message.type === 'WITHDRAWAL_APPROVED' || message.type === 'WITHDRAWAL_REJECTED') {
-          setPendingWithdrawals(prev => prev.filter(w => w.id !== message.data.id));
-        } else if (message.type === 'DEPOSIT_REQUESTED') {
-          setPendingDeposits(prev => [...prev, message.data]);
-          toast.info(`New deposit request from ${message.data.userName}`);
-        } else if (message.type === 'DEPOSIT_APPROVED' || message.type === 'DEPOSIT_REJECTED') {
-          setPendingDeposits(prev => prev.filter(d => d.id !== message.data.id));
+        }, 30000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'CHAT_MESSAGE') {
+            setAllMessages(prev => {
+              if (prev.some(m => m.id === message.data.id)) return prev;
+              return [...prev, message.data];
+            });
+            toast.info(`New message from ${message.data.senderName}`);
+          } else if (message.type === 'USER_REGISTERED') {
+            setUsers(prev => {
+              if (prev.some(u => u.id === message.data.id)) return prev;
+              return [message.data, ...prev];
+            });
+            toast.success(`New user registered: ${message.data.name}`);
+          } else if (message.type === 'USER_LOGGED_IN') {
+            toast.info(`User logged in: ${message.data.name}`);
+            setUsers(prev => prev.map(u => u.id === message.data.id ? { ...u, lastLogin: message.data.lastLogin } : u));
+          } else if (message.type === 'USER_UPDATED') {
+            setUsers(prev => prev.map(u => u.id === message.data.id ? message.data : u));
+            if (editingUserRef.current && editingUserRef.current.id === message.data.id) {
+              setEditingUser(message.data);
+              setEditAccountNumber(message.data.accountNumber || '');
+              setEditSortCode(message.data.sortCode || '');
+            }
+          } else if (message.type === 'DEPOSIT_ACCOUNTS_UPDATED') {
+            setDepositAccounts(message.data);
+            toast.info('Deposit accounts updated');
+          } else if (message.type === 'CRYPTO_WALLETS_UPDATED') {
+            setCryptoWallets(message.data);
+            toast.info('Crypto wallets updated');
+          } else if (message.type === 'WITHDRAWAL_REQUESTED') {
+            setPendingWithdrawals(prev => [...prev, message.data]);
+            toast.info(`New withdrawal request from ${message.data.userName}`);
+          } else if (message.type === 'WITHDRAWAL_APPROVED' || message.type === 'WITHDRAWAL_REJECTED') {
+            setPendingWithdrawals(prev => prev.filter(w => w.id !== message.data.id));
+          } else if (message.type === 'DEPOSIT_REQUESTED') {
+            setPendingDeposits(prev => [...prev, message.data]);
+            toast.info(`New deposit request from ${message.data.userName}`);
+          } else if (message.type === 'DEPOSIT_APPROVED' || message.type === 'DEPOSIT_REJECTED') {
+            setPendingDeposits(prev => prev.filter(d => d.id !== message.data.id));
+          }
+        } catch (e) {
+          console.error('Failed to parse WS message', e);
         }
-      } catch (e) {
-        console.error('Failed to parse WS message', e);
-      }
+      };
+
+      ws.onclose = () => {
+        console.log('Admin WebSocket disconnected. Reconnecting...');
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        reconnectTimeout = setTimeout(connect, 3000);
+      };
+
+      setSocket(ws);
     };
 
-    setSocket(ws);
-
-    // Periodic polling for static mode (Netlify)
-    const isLikelyStatic = window.location.hostname.includes('netlify') || !socket;
-    let interval: any;
-    
-    if (isLikelyStatic) {
-      interval = setInterval(() => {
-        // Only fetch if not currently editing a user to avoid losing input focus
-        if (!editingUserRef.current) {
-          fetchData();
-        }
-      }, 3000);
-    }
+    connect();
 
     return () => {
-      ws.close();
-      if (interval) clearInterval(interval);
+      if (ws) ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
     };
   }, []);
 
@@ -342,12 +353,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
     try {
       const result = await api.updateUserDetails(editingUser.id, {
         accountNumber: editAccountNumber,
-        sortCode: editSortCode
+        sortCode: editSortCode,
+        balance: parseFloat(editBalance)
       });
       
       if (result.status === 'ok') {
         setUsers(users.map(u => u.id === editingUser.id ? result.user : u));
         setEditingUser(result.user);
+        setEditBalance(result.user.balance.toString());
         
         // Update global session if it's the current user
         if (currentUser && result.user.id === currentUser.id) {
@@ -355,6 +368,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
         }
         
         toast.success('User details updated successfully');
+      } else {
+        toast.error(result.message || 'Failed to update user');
       }
     } catch (error) {
       toast.error('Failed to update user details');
@@ -377,6 +392,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
       if (result.status === 'ok') {
         setUsers(users.map(u => u.id === editingUser.id ? result.user : u));
         setEditingUser(result.user);
+        setEditBalance(result.user.balance.toString());
         
         // Update global session if it's the current user
         if (currentUser && result.user.id === currentUser.id) {
@@ -548,6 +564,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
                     setEditingUser(user);
                     setEditAccountNumber(user.accountNumber || '');
                     setEditSortCode(user.sortCode || '');
+                    setEditBalance(user.balance.toString());
                   }}
                   className={cn(
                     "p-3 rounded-xl border transition-all cursor-pointer group flex items-center justify-between",
@@ -1184,6 +1201,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onUpdateUser, currentU
               <div className="space-y-3">
                 <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Account Details</p>
                 <div className="space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">Current Balance ($)</label>
+                    <input 
+                      type="number" 
+                      value={editBalance}
+                      onChange={(e) => setEditBalance(e.target.value)}
+                      className={cn(
+                        "w-full px-4 py-2.5 rounded-xl text-[11px] font-bold outline-none",
+                        theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-100" : "bg-gray-100 border border-gray-200 text-gray-900"
+                      )}
+                    />
+                  </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">Account Number</label>
                     <input 
