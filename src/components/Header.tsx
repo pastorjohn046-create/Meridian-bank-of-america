@@ -1,6 +1,6 @@
 import React from 'react';
 import { Bell, User, Search, Sun, Moon, Compass, Headset } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 
@@ -12,6 +12,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onOpenChat }) => {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
 
   return (
     <header className={cn(
@@ -31,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenChat }) => {
             "p-2 rounded-full transition-all active:scale-90",
             theme === 'dark' ? "text-zinc-400 hover:bg-zinc-900" : "text-gray-500 hover:bg-gray-100"
           )}
-          onClick={onOpenChat}
+          onClick={() => navigate('/support')}
         >
           <Headset size={18} />
         </button>

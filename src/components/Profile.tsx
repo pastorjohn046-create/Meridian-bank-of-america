@@ -67,165 +67,187 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ isAdmin, user, onLogout,
 
   const menuItems = [
     ...(isAdmin ? [{ icon: ShieldAlert, label: 'System Administration', sub: 'Admin Portal Access', action: () => navigate('/admin') }] : []),
-    { icon: Headset, label: 'Customer Care', sub: '24/7 Priority Support', action: onOpenChat },
+    { icon: Headset, label: 'Customer Care', sub: '24/7 Priority Support', action: () => navigate('/support') },
     { icon: Shield, label: 'Security & Privacy', sub: 'PIN, Biometrics, 2FA' },
     { icon: Bell, label: 'Notifications', sub: 'Alerts, Marketing, Push' },
     { icon: CreditCard, label: 'Linked Accounts', sub: 'Banks, Cards, Wallets' },
     { icon: Settings, label: 'App Settings', sub: 'Theme, Language, Region' },
-    { icon: HelpCircle, label: 'Support & FAQ', sub: 'Help center, Contact us' },
+    { icon: HelpCircle, label: 'Support & FAQ', sub: 'Help center, Contact us', action: () => navigate('/support') },
   ];
 
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="px-4 pb-20 space-y-8"
+      className="px-5 pb-10 space-y-5"
     >
-      <header className="pt-2 px-1">
-        <h2 className="font-serif text-3xl font-light italic tracking-tight mb-1">Elite Profile</h2>
-        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.25em]">Managed Concierge Account</p>
+      <header className="space-y-0.5">
+        <h2 className={cn("text-lg font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Customer Dashboard</h2>
+        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Account Details & Settings</p>
       </header>
 
-      {/* Elite Membership Card */}
-      <div className="glass-card p-8 rounded-[3rem] text-center space-y-5 bg-dark-luxury relative overflow-hidden group">
-        {/* Glow effect */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-red-600/10 rounded-full blur-[80px]" />
-        
-        <div className="relative flex justify-center">
-          <div className="relative group/avatar">
-            <div className="w-24 h-24 rounded-full bg-premium-gradient p-1 shadow-2xl transition-transform duration-500 group-hover/avatar:scale-105">
-              <img 
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userSeed}`} 
-                alt="User" 
-                className="w-full h-full rounded-full bg-zinc-950 border-4 border-zinc-950"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <div className="absolute bottom-1 right-1 w-6 h-6 bg-emerald-500 rounded-full border-4 border-zinc-950 flex items-center justify-center">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            </div>
+      {/* Profile Card */}
+      <div className={cn(
+        "p-5 rounded-[2rem] flex flex-col items-center text-center space-y-3 transition-colors",
+        theme === 'dark' ? "bg-zinc-900/50 border border-zinc-800" : "bg-white border border-gray-100 shadow-sm"
+      )}>
+        <div className="relative">
+          <div className="w-20 h-20 rounded-full bg-indigo-600 p-1">
+            <img 
+              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userSeed}`} 
+              alt="User" 
+              className="w-full h-full rounded-full bg-white"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+          <div className="absolute bottom-0 right-0 w-6 h-6 bg-emerald-500 rounded-full border-4 border-white dark:border-zinc-900 flex items-center justify-center">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
           </div>
         </div>
-
-        <div className="space-y-1 relative z-10">
-          <h3 className="font-serif text-2xl italic font-light text-white">{userName}</h3>
-          <p className="text-[10px] text-red-500 font-bold uppercase tracking-[0.3em]">{isAdmin ? 'Senior Administrator' : 'Private Wealth Member'}</p>
-        </div>
-
-        <div className="flex items-center justify-center gap-4 pt-2">
-          <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-2xl">
-            <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">Tier</p>
-            <p className="text-[11px] font-bold text-white uppercase tracking-tighter">Diamond</p>
-          </div>
-          <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-2xl">
-            <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">Region</p>
-            <p className="text-[11px] font-bold text-white uppercase tracking-tighter">Infinite</p>
-          </div>
+        <div>
+          <h3 className={cn("text-lg font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{userName}</h3>
+          <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest">{isAdmin ? 'System Administrator' : 'Private Tier Member'}</p>
+          <p className={cn("text-sm font-bold mt-1 transition-colors", theme === 'dark' ? "text-emerald-400" : "text-emerald-600")}>
+            ${(user?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </p>
         </div>
       </div>
 
-      {/* Account Details & Coordination */}
-      <section className="space-y-4">
-        <h4 className="font-serif text-xl italic font-light tracking-wide px-1">Coordinated Details</h4>
-        <div className="glass-card p-6 rounded-[2.5rem] space-y-6">
-          <div className="flex justify-between items-center group">
-            <div className="space-y-1">
-              <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">WHSBC Account Number</p>
-              {isEditing ? (
-                <input 
-                  type="text"
-                  value={newAccountNumber}
-                  onChange={(e) => setNewAccountNumber(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-800 p-2 rounded-xl text-white font-mono text-sm outline-none w-full"
-                />
-              ) : (
-                <p className="text-sm font-mono font-bold text-white tracking-widest">{accountNumber}</p>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {isAdmin && !isEditing && (
-                <button onClick={() => setIsEditing(true)} className="p-3 bg-zinc-900/50 rounded-2xl text-red-500">
-                  <Settings size={18} />
-                </button>
-              )}
-              <button onClick={() => copyToClipboard(accountNumber, 'Account Number')} className="p-3 bg-zinc-900/50 rounded-2xl text-zinc-500 hover:text-white transition-colors">
-                <Copy size={18} />
+      {/* Account Details */}
+      <div className={cn("rounded-2xl p-4 space-y-3", theme === 'dark' ? "bg-zinc-900/50 border border-zinc-800" : "bg-gray-50")}>
+        <div className="flex justify-between items-center">
+          <div className="space-y-0.5 flex-1">
+            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Account Number</p>
+            {isEditing ? (
+              <input 
+                type="text"
+                value={newAccountNumber}
+                onChange={(e) => setNewAccountNumber(e.target.value)}
+                className={cn(
+                  "w-full px-2 py-1 rounded-lg text-[11px] font-mono font-bold outline-none border",
+                  theme === 'dark' ? "bg-zinc-800 border-zinc-700 text-zinc-100" : "bg-white border-gray-200 text-gray-900"
+                )}
+              />
+            ) : (
+              <p className={cn("text-[11px] font-mono font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{accountNumber}</p>
+            )}
+          </div>
+          <div className="flex gap-1">
+            {isAdmin && !isEditing && (
+              <button 
+                onClick={() => setIsEditing(true)}
+                className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? "bg-zinc-800 text-indigo-400" : "bg-white text-indigo-500")}
+              >
+                <Settings size={14} />
               </button>
-            </div>
+            )}
+            {!isEditing && (
+              <button 
+                onClick={() => copyToClipboard(accountNumber, 'Account Number')}
+                className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-white text-gray-400")}
+              >
+                <Copy size={14} />
+              </button>
+            )}
           </div>
-
-          <div className="h-px bg-zinc-800/50 w-full" />
-
-          <div className="flex justify-between items-center group">
-            <div className="space-y-1">
-              <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Secure Sort Code</p>
-              {isEditing ? (
-                <input 
-                  type="text"
-                  value={newSortCode}
-                  onChange={(e) => setNewSortCode(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-800 p-2 rounded-xl text-white font-mono text-sm outline-none w-full"
-                />
-              ) : (
-                <p className="text-sm font-mono font-bold text-white tracking-widest">{sortCode}</p>
-              )}
-            </div>
-            <button onClick={() => copyToClipboard(sortCode, 'Sort Code')} className="p-3 bg-zinc-900/50 rounded-2xl text-zinc-500 hover:text-white transition-colors">
-              <Copy size={18} />
+        </div>
+        <div className="flex justify-between items-center">
+          <div className="space-y-0.5 flex-1">
+            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Sort Code</p>
+            {isEditing ? (
+              <input 
+                type="text"
+                value={newSortCode}
+                onChange={(e) => setNewSortCode(e.target.value)}
+                className={cn(
+                  "w-full px-2 py-1 rounded-lg text-[11px] font-mono font-bold outline-none border",
+                  theme === 'dark' ? "bg-zinc-800 border-zinc-700 text-zinc-100" : "bg-white border-gray-200 text-gray-900"
+                )}
+              />
+            ) : (
+              <p className={cn("text-[11px] font-mono font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{sortCode}</p>
+            )}
+          </div>
+          {!isEditing && (
+            <button 
+              onClick={() => copyToClipboard(sortCode, 'Sort Code')}
+              className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-white text-gray-400")}
+            >
+              <Copy size={14} />
             </button>
-          </div>
-
-          {isEditing && (
-            <div className="flex gap-3 pt-4">
-              <button onClick={handleUpdateDetails} className="flex-1 py-4 bg-zinc-100 text-black rounded-2xl font-bold text-[10px] uppercase tracking-widest">Commit Changes</button>
-              <button onClick={() => setIsEditing(false)} className="flex-1 py-4 bg-zinc-900 text-zinc-500 rounded-2xl font-bold text-[10px] uppercase tracking-widest">Abort</button>
-            </div>
           )}
         </div>
-      </section>
 
-      {/* Concierge Menu */}
-      <section className="space-y-4">
-        <h4 className="font-serif text-xl italic font-light tracking-wide px-1">Management Hub</h4>
-        <div className="space-y-3">
+        {isEditing && (
+          <div className="flex gap-2 pt-2">
+            <button 
+              onClick={handleUpdateDetails}
+              className="flex-1 py-2 bg-indigo-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+            >
+              Save Changes
+            </button>
+            <button 
+              onClick={() => setIsEditing(false)}
+              className={cn(
+                "flex-1 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all",
+                theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-200 text-gray-600"
+              )}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Menu Sections */}
+      <div className="space-y-2">
+        <h4 className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Preferences</h4>
+        <div className={cn("rounded-2xl overflow-hidden border", theme === 'dark' ? "bg-zinc-900/50 border-zinc-800" : "bg-white border-gray-100")}>
           {menuItems.map((item, i) => (
             <button 
               key={i}
               onClick={() => item.action?.()}
-              className="glass-card w-full flex items-center justify-between p-5 rounded-[2rem] transition-all hover:bg-white/5 group"
+              className={cn(
+                "w-full flex items-center justify-between p-3.5 transition-colors border-b last:border-0",
+                theme === 'dark' ? "border-zinc-800 hover:bg-zinc-800/50" : "border-gray-50 hover:bg-gray-50"
+              )}
             >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-zinc-950 flex items-center justify-center text-zinc-500 border border-zinc-900 group-hover:text-red-500 transition-colors">
-                  <item.icon size={20} />
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-8 h-8 rounded-xl flex items-center justify-center transition-colors",
+                  theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-50 text-gray-500"
+                )}>
+                  <item.icon size={16} />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-bold text-white">{item.label}</p>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">{item.sub}</p>
+                  <p className={cn("text-[11px] font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{item.label}</p>
+                  <p className="text-[9px] text-gray-500 font-medium">{item.sub}</p>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-zinc-700" />
+              <ChevronRight size={14} className="text-gray-400" />
             </button>
           ))}
         </div>
-      </section>
-
-      <div className="space-y-4 pt-4">
-        <button 
-          onClick={() => {
-            toast.info('Securely terminating session...');
-            onLogout();
-            navigate('/login');
-          }}
-          className="w-full py-5 bg-red-950/20 text-red-500 rounded-[2rem] font-bold text-[10px] uppercase tracking-[0.25em] border border-red-900/30 flex items-center justify-center gap-2 transition-transform active:scale-95 hover:bg-red-950/40"
-        >
-          <LogOut size={16} />
-          Terminate Session
-        </button>
-
-        <p className="text-center text-[9px] text-zinc-600 font-bold uppercase tracking-[0.3em]">
-          WHSBC BANK ELITE • SECURE ENCRYPTED ACCESS
-        </p>
       </div>
+
+      <button 
+        onClick={() => {
+          toast.info('Logging out...');
+          onLogout();
+          navigate('/login');
+        }}
+        className={cn(
+          "w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95",
+          theme === 'dark' ? "bg-red-500/10 text-red-500 border border-red-500/20" : "bg-red-50 text-red-600 border border-red-100"
+        )}
+      >
+        <LogOut size={16} />
+        Log Out
+      </button>
+
+      <p className="text-center text-[8px] text-gray-500 font-bold uppercase tracking-widest pt-2">
+        WHSBC BANK v3.0.0 • Secure Session
+      </p>
     </motion.div>
   );
 };

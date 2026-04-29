@@ -8,14 +8,16 @@ import { ExchangeScreen } from './components/Exchange';
 import { MarketScreen } from './components/Market';
 import { TransactionDetails } from './components/TransactionDetails';
 import { ProfileScreen } from './components/Profile';
+import { SupportScreen } from './components/SupportScreen';
 import { AdminPortal } from './components/AdminPortal';
 import { SendScreen } from './components/SendScreen';
 import { WithdrawScreen } from './components/WithdrawScreen';
 import { LoginScreen } from './components/Login';
 import { SignupScreen } from './components/Signup';
 import { ChatBox } from './components/ChatBox';
-import { AnimatePresence } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Toaster, toast } from 'sonner';
+import { Headset } from 'lucide-react';
 
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { cn } from './lib/utils';
@@ -247,6 +249,7 @@ function AppContent() {
               <Route path="/exchange" element={isAuthenticated ? <ExchangeScreen user={currentUser} /> : <Navigate to="/login" />} />
               <Route path="/market" element={isAuthenticated ? <MarketScreen user={currentUser} /> : <Navigate to="/login" />} />
               <Route path="/profile" element={isAuthenticated ? <ProfileScreen isAdmin={isAdmin} user={currentUser} onLogout={handleLogout} onOpenChat={() => setIsChatOpen(true)} /> : <Navigate to="/login" />} />
+              <Route path="/support" element={isAuthenticated ? <SupportScreen onOpenChat={() => setIsChatOpen(true)} /> : <Navigate to="/login" />} />
               <Route path="/admin" element={isAuthenticated && isAdmin ? <AdminPortal onUpdateUser={updateUser} currentUser={currentUser} /> : <Navigate to="/" />} />
               <Route path="/send" element={isAuthenticated ? <SendScreen user={currentUser} onUpdateUser={updateUser} /> : <Navigate to="/login" />} />
               <Route path="/withdraw" element={isAuthenticated ? <WithdrawScreen user={currentUser} onUpdateUser={updateUser} /> : <Navigate to="/login" />} />
@@ -256,6 +259,27 @@ function AppContent() {
         </main>
 
         {showBottomNav && <BottomNav />}
+
+        {isAuthenticated && !isAuthPage && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsChatOpen(true)}
+            className={cn(
+              "fixed right-6 bottom-24 w-12 h-12 rounded-full shadow-2xl flex items-center justify-center z-40 transition-colors",
+              theme === 'dark' ? "bg-hsbc-red text-white" : "bg-hsbc-red text-white"
+            )}
+            style={{ 
+              boxShadow: theme === 'dark' 
+                ? '0 8px 30px rgba(219, 0, 15, 0.4)' 
+                : '0 8px 30px rgba(219, 0, 15, 0.3)' 
+            }}
+          >
+            <Headset size={20} />
+          </motion.button>
+        )}
         
         {isAuthenticated && currentUser && (
           <ChatBox 

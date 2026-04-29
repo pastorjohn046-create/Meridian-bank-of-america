@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Wallet, ArrowLeftRight, BarChart3 } from 'lucide-react';
+import { Home, Wallet, ArrowLeftRight, BarChart3, Headset } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -11,6 +11,7 @@ export const BottomNav: React.FC = () => {
     { id: 'wallet', path: '/wallet', icon: Wallet, label: 'Wallet' },
     { id: 'exchange', path: '/exchange', icon: ArrowLeftRight, label: 'Swap' },
     { id: 'market', path: '/market', icon: BarChart3, label: 'Market' },
+    { id: 'support', path: '/support', icon: Headset, label: 'Support' },
   ];
 
   return (

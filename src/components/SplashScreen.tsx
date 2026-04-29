@@ -12,22 +12,22 @@ export const SplashScreen: React.FC = () => {
         className="flex flex-col items-center gap-6"
       >
         <Logo size="lg" />
-        <div className="text-center space-y-3">
+        <div className="text-center space-y-2">
           <motion.h1 
             initial={{ y: 10, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-            className="text-white text-4xl font-serif italic font-light tracking-tight"
+            transition={{ delay: 0.3, duration: 0.4 }}
+            className="text-white text-3xl font-black tracking-tighter"
           >
             WHSBC BANK
           </motion.h1>
           <motion.p 
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.5 }}
-            transition={{ delay: 0.6, duration: 0.6 }}
-            className="text-white text-[9px] uppercase tracking-[0.4em] font-bold"
+            animate={{ opacity: 0.6 }}
+            transition={{ delay: 0.5, duration: 0.4 }}
+            className="text-white/60 text-[10px] uppercase tracking-[0.3em] font-bold"
           >
-            Exclusive Private Management
+            Private Wealth Management
           </motion.p>
         </div>
       </motion.div>

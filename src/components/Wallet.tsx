@@ -1,11 +1,11 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { MOCK_ASSETS } from '../mockData';
-import { TrendingUp, TrendingDown, ChevronRight, Building2, Bitcoin, Copy, Check, Plus, X, PieChart as PieIcon, LineChart, ShieldCheck } from 'lucide-react';
+import { TrendingUp, TrendingDown, ChevronRight, Building2, Bitcoin, Copy, Check, Plus, X } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
 import { toast } from 'sonner';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 import { api } from '../services/api';
 
@@ -28,13 +28,11 @@ export const WalletScreen: React.FC<WalletProps> = ({ user, onUpdateUser }) => {
     a.symbol === 'USD' ? { ...a, balance: Number(user.balance), fiatValue: Number(user.balance) } : a
   );
   const cryptoAssets = MOCK_ASSETS.filter(a => a.type === 'crypto');
-  const allAssets = [...fiatAssets, ...cryptoAssets];
-
-  const pieData = allAssets.map(a => ({ name: a.name, value: a.fiatValue, color: a.color }));
 
   React.useEffect(() => {
     const fetchInitialData = async () => {
       try {
+        // Sync user data on mount
         const updatedUser = await api.syncCurrentUser(user.id);
         if (updatedUser && onUpdateUser) {
           onUpdateUser(updatedUser);
@@ -53,6 +51,7 @@ export const WalletScreen: React.FC<WalletProps> = ({ user, onUpdateUser }) => {
 
     fetchInitialData();
 
+    // WebSocket for real-time updates
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
     const socket = new WebSocket(wsUrl);
@@ -68,6 +67,10 @@ export const WalletScreen: React.FC<WalletProps> = ({ user, onUpdateUser }) => {
           toast.success('Deposit Approved', {
             description: `Your deposit of $${message.data.amount.toLocaleString()} has been approved.`
           });
+        } else if (message.type === 'DEPOSIT_REJECTED' && message.data.userId === user?.id) {
+          toast.error('Deposit Rejected', {
+            description: `Your deposit of $${message.data.amount.toLocaleString()} was rejected.`
+          });
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);
@@ -76,6 +79,13 @@ export const WalletScreen: React.FC<WalletProps> = ({ user, onUpdateUser }) => {
 
     return () => socket.close();
   }, []);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedAddress(text);
+    toast.success('Address copied to clipboard');
+    setTimeout(() => setCopiedAddress(null), 2000);
+  };
 
   const handleConfirmDeposit = async () => {
     if (!depositAmount || parseFloat(depositAmount) <= 0 || !selectedMethod) {
@@ -96,8 +106,8 @@ export const WalletScreen: React.FC<WalletProps> = ({ user, onUpdateUser }) => {
       });
 
       if (result.status === 'ok') {
-        toast.success('Wait for processing', {
-          description: 'Your request is being reviewed by our security team.'
+        toast.success('Deposit Request Sent', {
+          description: 'Your deposit is pending administrator approval.'
         });
         setIsDepositModalOpen(false);
         setDepositAmount('');
@@ -114,206 +124,219 @@ export const WalletScreen: React.FC<WalletProps> = ({ user, onUpdateUser }) => {
     <motion.div 
       initial={{ opacity: 0, x: 10 }}
       animate={{ opacity: 1, x: 0 }}
-      className="px-4 pb-20 space-y-10"
+      className="px-5 pb-16 space-y-6"
     >
-      {/* Portfolio Insight */}
-      <header className="pt-2 px-1">
-        <h2 className="font-serif text-3xl font-light italic tracking-tight mb-1">Portfolio</h2>
-        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.25em]">Strategic Asset Allocation</p>
+      <header className="space-y-0.5">
+        <h2 className={cn("text-lg font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>My Assets</h2>
+        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Portfolio Overview</p>
       </header>
 
-      {/* Allocation Wheel & Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="glass-card p-6 rounded-[2.5rem] flex items-center justify-between">
-          <div className="w-32 h-32">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  innerRadius={35}
-                  outerRadius={55}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex-1 pl-6 space-y-3">
-            <div>
-              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Total Wealth</p>
-              <p className="text-2xl font-black text-white">${Number(user.balance).toLocaleString()}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="bg-emerald-500/10 px-2 py-1 rounded-lg">
-                <p className="text-[10px] font-bold text-emerald-500">+4.2% YTD</p>
+      {/* Deposit Accounts Section */}
+      {(depositAccounts.length > 0 || cryptoWallets.length > 0) && (
+        <section className="space-y-4">
+          <header className="flex items-center justify-between px-1">
+            <h3 className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Deposit Channels</h3>
+            <span className="text-[8px] font-bold text-indigo-500 uppercase tracking-tighter">Admin Verified</span>
+          </header>
+          
+          <div className="space-y-3">
+            {/* Bank Accounts */}
+            {depositAccounts.map((acc) => (
+              <div 
+                key={acc.id}
+                onClick={() => {
+                  setSelectedMethod(acc);
+                  setIsDepositModalOpen(true);
+                }}
+                className={cn(
+                  "p-4 rounded-2xl border flex items-center justify-between transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]",
+                  theme === 'dark' ? "bg-zinc-900/50 border-zinc-800" : "bg-white border-gray-100 shadow-sm"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gold-gradient flex items-center justify-center text-white">
+                    <Building2 size={20} />
+                  </div>
+                  <div>
+                    <p className={cn("text-xs font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{acc.bankName}</p>
+                    <p className={cn("text-[10px] font-medium", theme === 'dark' ? "text-zinc-400" : "text-gray-500")}>
+                      {acc.accountNumber} • {acc.accountName}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Deposit Now</p>
+                </div>
               </div>
-              <ShieldCheck size={16} className="text-zinc-500" />
-            </div>
-          </div>
-        </div>
+            ))}
 
-        {/* Projected Yields */}
-        <div className="glass-card p-6 rounded-[2.5rem] flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Projected Yield</h4>
-            <LineChart size={18} className="text-red-500" />
+            {/* Crypto Wallets */}
+            {cryptoWallets.map((wallet) => (
+              <div 
+                key={wallet.id}
+                onClick={() => {
+                  setSelectedMethod(wallet);
+                  setIsDepositModalOpen(true);
+                }}
+                className={cn(
+                  "p-4 rounded-2xl border flex items-center justify-between transition-all cursor-pointer group hover:scale-[1.02] active:scale-[0.98]",
+                  theme === 'dark' ? "bg-zinc-900/50 border-zinc-800 hover:bg-zinc-800" : "bg-white border-gray-100 shadow-sm hover:shadow-md"
+                )}
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-gradient flex items-center justify-center text-white">
+                    <Bitcoin size={20} />
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className={cn("text-xs font-bold", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{wallet.coin} ({wallet.symbol})</p>
+                    <p className={cn("text-[9px] font-medium truncate max-w-[150px]", theme === 'dark' ? "text-zinc-500" : "text-gray-400")}>
+                      {wallet.address}
+                    </p>
+                    <p className="text-[8px] text-emerald-500 font-bold uppercase tracking-tighter">Network: {wallet.network}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <div className={cn(
+                    "p-2 rounded-lg transition-colors",
+                    theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-50 text-gray-400"
+                  )}>
+                    <Plus size={14} className="text-emerald-500" />
+                  </div>
+                  <p className="text-[8px] font-bold text-gray-500 uppercase tracking-tighter">Deposit</p>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="py-2">
-            <p className="text-3xl font-serif italic font-light">$12,450</p>
-            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Estimated Annual Dividends</p>
-          </div>
-          <div className="w-full bg-zinc-900 rounded-full h-1 mt-4">
-            <div className="bg-red-600 h-1 rounded-full w-[65%]" />
-          </div>
-        </div>
-      </div>
+        </section>
+      )}
 
-      {/* Action Tabs: Deposit Channels */}
-      <section className="space-y-4">
-        <h3 className="font-serif text-xl italic font-light tracking-wide px-1">Funding Channels</h3>
-        <div className="grid grid-cols-1 gap-3">
-          {depositAccounts.concat(cryptoWallets).map((method, i) => (
-            <button 
-              key={i}
-              onClick={() => {
-                setSelectedMethod(method);
-                setIsDepositModalOpen(true);
-              }}
-              className="glass-card p-5 rounded-[2rem] flex items-center justify-between transition-all hover:bg-white/5 active:scale-[0.98] text-left"
+      {/* Deposit Confirmation Modal */}
+      <AnimatePresence>
+        {isDepositModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              className={cn(
+                "w-full max-w-md rounded-[2.5rem] p-6 space-y-6 shadow-2xl",
+                theme === 'dark' ? "bg-zinc-900 border border-zinc-800" : "bg-white"
+              )}
             >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-zinc-950 flex items-center justify-center border border-zinc-800">
-                  {method.bankName ? <Building2 size={22} className="text-red-500" /> : <Bitcoin size={22} className="text-emerald-500" />}
-                </div>
+              <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-sm font-bold text-white">{method.bankName || method.coin}</p>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{method.accountNumber || method.address.slice(0, 16) + '...'}</p>
+                  <h3 className={cn("text-lg font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Confirm Deposit</h3>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Submit your transaction details</p>
+                </div>
+                <button onClick={() => setIsDepositModalOpen(false)} className={cn("p-2 rounded-full", theme === 'dark' ? "bg-zinc-800 text-zinc-400" : "bg-gray-100 text-gray-600")}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className={cn("p-4 rounded-2xl space-y-2", theme === 'dark' ? "bg-zinc-800" : "bg-gray-50")}>
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Selected Method</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                    {selectedMethod?.bankName ? <Building2 size={16} /> : <Bitcoin size={16} />}
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold">{selectedMethod?.bankName || selectedMethod?.coin}</p>
+                    <p className="text-[9px] text-gray-500 truncate max-w-[200px]">{selectedMethod?.accountNumber || selectedMethod?.address}</p>
+                  </div>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-zinc-700" />
-            </button>
-          ))}
-        </div>
-      </section>
 
-      {/* Assets Grid */}
-      <section className="space-y-6">
-        <h3 className="font-serif text-xl italic font-light tracking-wide px-1">Holdings</h3>
-        
-        {/* Cash Assets */}
-        <div className="space-y-3">
-          <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em] px-1">Fixed Income & Fiat</p>
+              <div className="space-y-3">
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Amount Sent</p>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+                  <input 
+                    type="number" 
+                    placeholder="0.00"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    className={cn(
+                      "w-full pl-8 pr-4 py-4 rounded-2xl text-lg font-bold outline-none transition-all",
+                      theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-100 focus:border-indigo-500" : "bg-gray-100 border border-gray-200 text-gray-900 focus:border-indigo-500"
+                    )}
+                  />
+                </div>
+                <p className="text-[8px] text-gray-400 px-1">Please enter the exact amount you transferred to the details above.</p>
+              </div>
+
+              <button 
+                onClick={handleConfirmDeposit}
+                disabled={isSubmitting || !depositAmount}
+                className={cn(
+                  "w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50",
+                  "bg-indigo-600 text-white shadow-indigo-500/20"
+                )}
+              >
+                {isSubmitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check size={16} />}
+                Confirm Deposit
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Fiat Section */}
+      <section className="space-y-2">
+        <h3 className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Fiat Currencies</h3>
+        <div className="space-y-1.5">
           {fiatAssets.map((asset) => (
-            <HOLDING_CARD key={asset.id} asset={asset} />
-          ))}
-        </div>
-
-        {/* Alternatives */}
-        <div className="space-y-3">
-          <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em] px-1">Alternative Investments</p>
-          {cryptoAssets.map((asset) => (
-            <HOLDING_CARD key={asset.id} asset={asset} />
+            <AssetCard key={asset.id} asset={asset} theme={theme} />
           ))}
         </div>
       </section>
 
-      <DepositModal 
-        isOpen={isDepositModalOpen} 
-        onClose={() => setIsDepositModalOpen(false)} 
-        method={selectedMethod} 
-        amount={depositAmount}
-        setAmount={setDepositAmount}
-        onConfirm={handleConfirmDeposit}
-        isSubmitting={isSubmitting}
-      />
+      {/* Crypto Section */}
+      <section className="space-y-2">
+        <h3 className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Cryptocurrencies</h3>
+        <div className="space-y-1.5">
+          {cryptoAssets.map((asset) => (
+            <AssetCard key={asset.id} asset={asset} theme={theme} />
+          ))}
+        </div>
+      </section>
     </motion.div>
   );
 };
 
-const HOLDING_CARD: React.FC<{ asset: any }> = ({ asset }) => (
-  <div className="glass-card p-5 rounded-[2rem] flex items-center justify-between group">
-    <div className="flex items-center gap-4">
+const AssetCard: React.FC<{ asset: any, theme: string }> = ({ asset, theme }) => (
+  <div className={cn(
+    "flex items-center justify-between p-2.5 rounded-xl transition-all cursor-pointer group",
+    theme === 'dark' ? "bg-zinc-900/50 border border-zinc-800 hover:bg-zinc-900" : "bg-white border border-gray-100 shadow-sm hover:shadow-md"
+  )}>
+    <div className="flex items-center gap-2.5">
       <div 
-        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-xl"
+        className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-inner"
         style={{ backgroundColor: asset.color }}
       >
         {asset.symbol[0]}
       </div>
       <div>
-        <p className="text-[13px] font-bold text-white">{asset.name}</p>
-        <div className="flex items-center gap-2 font-bold uppercase text-[9px] tracking-widest mt-0.5">
-          <span className="text-zinc-500">{asset.balance} {asset.symbol}</span>
-          {asset.change24h > 0 ? (
-            <span className="text-emerald-500 flex items-center gap-0.5"><TrendingUp size={10} /> {asset.change24h}%</span>
-          ) : (
-            <span className="text-red-500 flex items-center gap-0.5"><TrendingDown size={10} /> {Math.abs(asset.change24h)}%</span>
+        <p className={cn("text-[11px] font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>{asset.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tight">{asset.balance} {asset.symbol}</p>
+          {asset.change24h !== 0 && (
+            <span className={cn(
+              "text-[8px] font-bold flex items-center gap-0.5",
+              asset.change24h > 0 ? "text-emerald-500" : "text-red-500"
+            )}>
+              {asset.change24h > 0 ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
+              {Math.abs(asset.change24h)}%
+            </span>
           )}
         </div>
       </div>
     </div>
-    <div className="text-right">
-      <p className="text-[14px] font-bold text-white">${asset.fiatValue.toLocaleString()}</p>
-      <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Market Value</p>
+    <div className="flex items-center gap-2">
+      <div className="text-right">
+        <p className={cn("text-[11px] font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>${asset.fiatValue.toLocaleString()}</p>
+        <p className="text-[8px] text-gray-500 font-bold uppercase tracking-tighter">Value USD</p>
+      </div>
+      <ChevronRight size={12} className={cn("transition-colors", theme === 'dark' ? "text-zinc-700 group-hover:text-zinc-500" : "text-gray-300 group-hover:text-gray-500")} />
     </div>
   </div>
-);
-
-const DepositModal: React.FC<any> = ({ isOpen, onClose, method, amount, setAmount, onConfirm, isSubmitting }) => (
-  <AnimatePresence>
-    {isOpen && (
-      <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/80 backdrop-blur-md">
-        <motion.div 
-          initial={{ y: 200 }}
-          animate={{ y: 0 }}
-          exit={{ y: 200 }}
-          className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-[3rem] p-8 space-y-8"
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="font-serif text-2xl italic font-light tracking-wide text-white">Deposit Assets</h3>
-              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Secure External Transfer</p>
-            </div>
-            <button onClick={onClose} className="p-3 bg-zinc-900 rounded-2xl text-zinc-500">
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="bg-zinc-900/50 p-6 rounded-[2rem] border border-zinc-800 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center">
-              {method?.bankName ? <Building2 size={20} className="text-red-500" /> : <Bitcoin size={20} className="text-emerald-500" />}
-            </div>
-            <div>
-              <p className="text-xs font-bold text-white">{method?.bankName || method?.coin}</p>
-              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">{method?.accountNumber || method?.address}</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="relative">
-              <span className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-500 font-serif italic text-xl">$</span>
-              <input 
-                type="number" 
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-12 pr-6 py-6 bg-zinc-900 border border-zinc-700 rounded-[1.5rem] text-2xl font-black text-white outline-none focus:border-red-500 transition-colors"
-              />
-            </div>
-          </div>
-
-          <button 
-            onClick={onConfirm}
-            disabled={isSubmitting || !amount}
-            className="w-full py-5 bg-zinc-100 text-black rounded-[1.5rem] font-bold uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-transform disabled:opacity-50"
-          >
-            {isSubmitting ? "Encrypting..." : "Confirm Secure Deposit"}
-          </button>
-        </motion.div>
-      </div>
-    )}
-  </AnimatePresence>
 );

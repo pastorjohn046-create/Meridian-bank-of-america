@@ -1,16 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Cormorant Garamond", serif;
   --color-bank-gold: #D4AF37;
   --color-bank-midnight: #0A0F1E;
   --color-bank-emerald: #064E3B;
   --color-bank-accent: #6366F1;
   --color-hsbc-red: #db0011;
-  --color-prestige-red: #8B0000;
-  --color-premium-black: #050505;
 }
 
 @layer utilities {
@@ -33,27 +29,14 @@
   .bg-emerald-gradient {
     background: linear-gradient(135deg, #2d0000 0%, #1a0000 100%);
   }
-  .bg-dark-luxury {
-    background: linear-gradient(180deg, #0f1012 0%, #050505 100%);
-  }
-  .glass-card {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
   .text-gold {
     color: #ff0000;
   }
   .text-hsbc {
     color: #ff0000;
   }
-  .bento-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-  }
 }
 
 body {
-  @apply bg-zinc-950 text-zinc-100;
+  @apply bg-gray-50;
 }
