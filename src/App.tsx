@@ -21,6 +21,8 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { cn } from './lib/utils';
 import { api } from './services/api';
 
+import { SplashScreen } from './components/SplashScreen';
+
 function AppContent() {
   const location = useLocation();
   const { theme } = useTheme();
@@ -29,14 +31,23 @@ function AppContent() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   const currentUserRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Splash screen timer
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('meridian_user');
+    const savedUser = localStorage.getItem('whsbc_user');
     if (savedUser) {
       const user = JSON.parse(savedUser);
       setCurrentUser(user);
@@ -85,7 +96,7 @@ function AppContent() {
     setCurrentUser(user);
     setIsAuthenticated(true);
     setIsAdmin(!!admin || user.email === 'Jobfindercorps@gmail.com');
-    localStorage.setItem('meridian_user', JSON.stringify(user));
+    localStorage.setItem('whsbc_user', JSON.stringify(user));
   };
 
   const updateUser = (user: any) => {
@@ -95,7 +106,7 @@ function AppContent() {
       balance: Number(user.balance)
     };
     setCurrentUser(userWithNumberBalance);
-    localStorage.setItem('meridian_user', JSON.stringify(userWithNumberBalance));
+    localStorage.setItem('whsbc_user', JSON.stringify(userWithNumberBalance));
   };
 
   const updateUserRef = useRef(updateUser);
@@ -107,7 +118,7 @@ function AppContent() {
     setCurrentUser(null);
     setIsAuthenticated(false);
     setIsAdmin(false);
-    localStorage.removeItem('meridian_user');
+    localStorage.removeItem('whsbc_user');
   };
 
   useEffect(() => {
@@ -156,7 +167,7 @@ function AppContent() {
           } else if (message.type === 'USER_UPDATED') {
             const updatedUser = message.data;
             // Get current user from localStorage if ref is null (e.g. during login transition)
-            const activeUser = currentUserRef.current || JSON.parse(localStorage.getItem('meridian_user') || 'null');
+            const activeUser = currentUserRef.current || JSON.parse(localStorage.getItem('whsbc_user') || 'null');
             
             if (activeUser && updatedUser.id === activeUser.id) {
               console.log('WS: Current user updated', updatedUser.balance);
@@ -183,7 +194,7 @@ function AppContent() {
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'meridian_user') {
+      if (e.key === 'whsbc_user') {
         if (e.newValue) {
           setCurrentUser(JSON.parse(e.newValue));
         } else {
@@ -202,6 +213,10 @@ function AppContent() {
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
   const showBottomNav = isAuthenticated && !isAuthPage && !location.pathname.startsWith('/transaction/');
   const showHeader = isAuthenticated && !isAuthPage;
+
+  if (showSplash) {
+    return <SplashScreen />;
+  }
 
   return (
     <div className={cn(

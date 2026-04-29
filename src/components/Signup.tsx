@@ -18,6 +18,8 @@ import { useTheme } from '../contexts/ThemeContext';
 
 import { api } from '../services/api';
 
+import { Logo } from './Logo';
+
 interface AuthProps {
   onLogin: (user: any) => void;
 }
@@ -82,6 +84,10 @@ export const SignupScreen: React.FC<AuthProps> = ({ onLogin }) => {
             exit={{ opacity: 0, x: -20 }}
             className="space-y-4"
           >
+            <div className="flex items-center gap-3 mb-2">
+              <Logo size="sm" />
+              <h1 className={cn("text-lg font-black tracking-tighter", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>WHSBC BANK</h1>
+            </div>
             <div className="space-y-1">
               <h2 className={cn("text-xl font-bold tracking-tight", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Personal Details</h2>
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Step 1 of 3</p>
@@ -214,7 +220,7 @@ export const SignupScreen: React.FC<AuthProps> = ({ onLogin }) => {
             </div>
             <div className="space-y-2">
               <h2 className={cn("text-2xl font-bold tracking-tight", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Account Ready</h2>
-              <p className="text-xs text-gray-500 leading-relaxed max-w-[200px] mx-auto">Welcome to Meridian Wealth. Your private banking journey begins now.</p>
+              <p className="text-xs text-gray-500 leading-relaxed max-w-[200px] mx-auto">Welcome to WHSBC BANK. Your private banking journey begins now.</p>
             </div>
           </motion.div>
         );

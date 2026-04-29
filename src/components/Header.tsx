@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 
+import { Logo } from './Logo';
+
 interface HeaderProps {
   onOpenChat: () => void;
 }
@@ -17,12 +19,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenChat }) => {
       theme === 'dark' ? "bg-zinc-950/80 border-b border-zinc-800" : "bg-white/80 border-b border-gray-50"
     )}>
       <div className="flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl bg-premium-gradient flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-          <Compass size={20} strokeWidth={2.5} className="text-gold" />
-        </div>
+        <Logo size="sm" />
         <div>
-          <h1 className={cn("text-xs font-bold transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>Meridian Wealth</h1>
-          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Institutional Banking</p>
+          <h1 className={cn("text-sm font-black tracking-tighter transition-colors", theme === 'dark' ? "text-zinc-100" : "text-gray-900")}>WHSBC BANK</h1>
+          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.2em]">Private Banking</p>
         </div>
       </div>
       <div className="flex items-center gap-2">
